@@ -1,0 +1,13 @@
+{
+  "id": "004",
+  "slug": "silt",
+  "title": "Silt",
+  "date": "2026-09-06",
+  "tags": ["flow", "curl-noise", "worley", "lic"],
+  "poster": { "frame": 0, "seed": 0 },
+  "video": { "seconds": 16, "fps": 60 },
+  "still": { "width": 4000, "height": 5000, "spp": 16 },
+  "presets": [],
+  "notes": "A cellular field smeared along the streamlines of a divergence-free curl-noise flow. Forced analytic noise derivatives, curl noise, Worley and the flow integrator into basics. Stateless on purpose: per-pixel streamline integration keeps print detail unbounded, unlike advecting a dye field through a fixed grid.",
+  "ref": { "size": 144, "draws": 2, "spp": 2, "frame": 0, "seed": 0 }
+}
