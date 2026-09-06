@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>procedural art — 001 Drift</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: #0b0b0d; }
+      #stage { display: block; width: 100vw; height: 100vh; }
+      #error {
+        position: fixed; inset: 0; margin: 0; padding: 24px;
+        overflow: auto; background: rgba(12, 10, 14, 0.94);
+        color: #ffb4a2; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre; tab-size: 4;
+      }
+      #hint {
+        position: fixed; left: 12px; bottom: 10px; pointer-events: none;
+        color: rgba(255,255,255,0.34);
+        font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      #hint a { pointer-events: auto; color: inherit; }
+      #hint a:hover { color: rgba(255,255,255,0.8); }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <pre id="error" hidden></pre>
+    <div id="hint"><a href="/gallery.html">gallery</a> · space pause · ← → step · r reseed · 0 rewind · h panel</div>
+    <script type="module" src="/visualization/main.ts"></script>
+  </body>
+</html>

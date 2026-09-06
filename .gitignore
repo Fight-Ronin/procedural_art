@@ -1,0 +1,7 @@
+node_modules/
+dist/
+artwork/*/out/
+*.local
+.DS_Store
+artwork/out/
+Claude outputs/
