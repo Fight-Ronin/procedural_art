@@ -1,0 +1,33 @@
+{
+  "id": "001",
+  "slug": "drift",
+  "title": "Drift",
+  "date": "2026-09-05",
+  "tags": [
+    "fbm",
+    "domain-warp",
+    "field"
+  ],
+  "poster": {
+    "frame": 0,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 12,
+    "fps": 60
+  },
+  "still": {
+    "width": 4000,
+    "height": 5000,
+    "spp": 16
+  },
+  "presets": [],
+  "notes": "First piece. Exists to prove the chain: include resolver -> source map -> preamble -> declared parameters -> supersampled render -> single sRGB encode.",
+  "ref": {
+    "size": 192,
+    "draws": 2,
+    "spp": 2,
+    "frame": 0,
+    "seed": 0
+  }
+}
