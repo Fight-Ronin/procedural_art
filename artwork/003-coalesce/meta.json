@@ -1,0 +1,42 @@
+{
+  "id": "003",
+  "slug": "coalesce",
+  "title": "Coalesce",
+  "date": "2026-09-05",
+  "tags": [
+    "reaction-diffusion",
+    "gray-scott",
+    "feedback",
+    "stateful"
+  ],
+  "passes": [
+    {
+      "id": "a",
+      "shader": "buffer-a.frag",
+      "size": 384,
+      "substeps": 20
+    }
+  ],
+  "poster": {
+    "frame": 150,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 30,
+    "fps": 60
+  },
+  "still": {
+    "width": 4000,
+    "height": 4000,
+    "spp": 8
+  },
+  "presets": [],
+  "notes": "First stateful piece. Forced the pass chain: float ping-pong targets at their own resolution, substeps, an init step, and self-reading feedback. Simulation at half display resolution with detail recovered in the image pass — the print strategy for stateful work.",
+  "ref": {
+    "size": 160,
+    "draws": 2,
+    "spp": 2,
+    "frame": 12,
+    "seed": 0
+  }
+}
