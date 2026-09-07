@@ -1,0 +1,37 @@
+{
+  "id": "007",
+  "slug": "plate",
+  "title": "Plate",
+  "display": {
+    "exposure": 0.0,
+    "tonemap": "none"
+  },
+  "date": "2026-09-06",
+  "tags": [
+    "2d-sdf",
+    "quadtree",
+    "linework"
+  ],
+  "poster": {
+    "frame": 0,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 14,
+    "fps": 60
+  },
+  "still": {
+    "width": 4000,
+    "height": 4000,
+    "spp": 16
+  },
+  "presets": [],
+  "notes": "The piece that forced basics/sdf/prim2d. Hard-edged geometry: a quadtree whose depth comes from a low-frequency field, each leaf carrying a stroked 2D SDF mark. Reads no screen-space derivative \u2014 an exact distance means the pixel footprint of the field is pxSize() times the world scale, known analytically. Reads no uQuality either: gating would move the cell boundaries, so the preview would be a different drawing from the print.",
+  "ref": {
+    "size": 176,
+    "draws": 2,
+    "spp": 2,
+    "frame": 0,
+    "seed": 0
+  }
+}
