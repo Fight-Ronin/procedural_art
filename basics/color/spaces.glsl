@@ -57,3 +57,16 @@ vec3 colMixOklab(vec3 a, vec3 b, float t) {
 
 /** Oklab lightness only — a decent perceptual luma. */
 float colLuma(vec3 linear) { return colLinearToOklab(linear).x; }
+
+/**
+ * Rec.709 luminance of a linear colour. Radiometric, not perceptual.
+ *
+ * The one to threshold HDR on. `colLuma` is Oklab lightness, which is a
+ * cube-root of the radiance and is built to describe colours a display can
+ * show — so it COMPRESSES exactly the range above 1 that a highlight lives in.
+ * Measured on 008: a core at linear (1.88, 1.48, 0.83) has an Oklab lightness
+ * of 1.15, so a threshold of 1.0 kept a thirteenth of its energy and the bloom
+ * pass rendered a halo indistinguishable from no halo at all. In linear
+ * luminance the same colour reads 1.58, and thresholding it means what it says.
+ */
+float colLumaLinear(vec3 linear) { return dot(linear, vec3(0.2126, 0.7152, 0.0722)); }

@@ -1,0 +1,108 @@
+{
+  "id": "008",
+  "slug": "ember",
+  "title": "Ember",
+  "display": {
+    "exposure": 0,
+    "tonemap": "aces",
+    "bloom": {
+      "strength": 0.45,
+      "threshold": 0.9,
+      "size": 256,
+      "iterations": 5
+    }
+  },
+  "date": "2026-09-07",
+  "tags": [
+    "volume",
+    "emission",
+    "hdr"
+  ],
+  "poster": {
+    "frame": 0,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 16,
+    "fps": 60
+  },
+  "still": {
+    "width": 4000,
+    "height": 4000,
+    "spp": 16
+  },
+  "thumb": {
+    "draws": 4,
+    "spp": 4
+  },
+  "presets": [
+    {
+      "name": "blue-smoke",
+      "values": {
+        "uBound": 2.2,
+        "uMajor": 1.15,
+        "uMinor": 0.3,
+        "uTwist": 1.35,
+        "uReach": 0.2,
+        "uFreq": 2.4,
+        "uOct": 4,
+        "uFloor": 0.7,
+        "uSharp": 2.2,
+        "uDensity": 9,
+        "uEmit": 0.9,
+        "uHeat": 1.1,
+        "uDrift": 0.09,
+        "uOrbit": 0.06,
+        "uFov": 0.95,
+        "uDist": 4,
+        "uHigh": 2.4,
+        "uCoal": "#0a1430",
+        "uFlame": "#2f6ad0",
+        "uCore": "#cfe4ff",
+        "uNight": "#05060b",
+        "uDisplayExposure": 0.4,
+        "uBloomStrength": 0.45,
+        "uBloomThreshold": 0.9,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "forge",
+      "values": {
+        "uBound": 2.2,
+        "uMajor": 1.15,
+        "uMinor": 0.3,
+        "uTwist": 1.35,
+        "uReach": 0.2,
+        "uFreq": 2.4,
+        "uOct": 4,
+        "uFloor": 0.68,
+        "uSharp": 3.4,
+        "uDensity": 8.5,
+        "uEmit": 3.2,
+        "uHeat": 2.6,
+        "uDrift": 0.09,
+        "uOrbit": 0.06,
+        "uFov": 0.95,
+        "uDist": 2.6,
+        "uHigh": 2.4,
+        "uCoal": "#4b0d06",
+        "uFlame": "#ff5a1e",
+        "uCore": "#ffe6b0",
+        "uNight": "#05060b",
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0.7,
+        "uBloomThreshold": 0.9,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
+  "notes": "The first piece that makes its own light. Emission-absorption volume integration, which forced basics/volume. Radiance runs past 1 in the hot cores, so it is the piece the float accumulator and the bloom pass were built for.",
+  "ref": {
+    "size": 104,
+    "draws": 2,
+    "spp": 2,
+    "frame": 0,
+    "seed": 0
+  }
+}

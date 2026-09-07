@@ -1,5 +1,6 @@
 #pragma once
 #include "core/math.glsl"
+#include "raymarch/camera.glsl"
 
 // GLSL has no function pointers, so the scene enters the library through a
 // prototype the artwork fills in. This is the one documented place where a
@@ -80,20 +81,4 @@ vec3 rmNormal(vec3 p, float eps) {
         k.yyx * sceneSdf(p + k.yyx * eps) +
         k.yxy * sceneSdf(p + k.yxy * eps) +
         k.xxx * sceneSdf(p + k.xxx * eps));
-}
-
-/** Ray from a pinhole camera looking at `target`. `fov` is vertical, radians. */
-void rmCamera(vec2 artUv, vec3 eye, vec3 target, vec3 up, float fov,
-              out vec3 ro, out vec3 rd) {
-    vec3 f = normalize(target - eye);
-    vec3 r = normalize(cross(f, up));
-    vec3 u = cross(r, f);
-    float z = 1.0 / tan(fov * 0.5);
-    ro = eye;
-    rd = normalize(artUv.x * r * 2.0 + artUv.y * u * 2.0 + f * z);
-}
-
-/** The world-space footprint of one output pixel, for rmMarch's `footprint`. */
-float rmFootprint(float pixelSize, float fov) {
-    return pixelSize * 2.0 * tan(fov * 0.5);
 }
