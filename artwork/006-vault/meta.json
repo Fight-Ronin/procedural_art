@@ -1,0 +1,49 @@
+{
+  "id": "006",
+  "slug": "vault",
+  "title": "Vault",
+  "display": {
+    "exposure": 0.05,
+    "tonemap": "aces",
+    "bloom": {
+      "strength": 0.3,
+      "threshold": 0.35,
+      "size": 256,
+      "iterations": 5
+    }
+  },
+  "date": "2026-09-06",
+  "tags": [
+    "raymarch",
+    "sdf",
+    "repetition",
+    "volumetric",
+    "scattering"
+  ],
+  "poster": {
+    "frame": 0,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 24,
+    "fps": 60
+  },
+  "still": {
+    "width": 3600,
+    "height": 4500,
+    "spp": 24
+  },
+  "presets": [],
+  "notes": "Built from the parts of basics/ no piece had touched: polar repetition, boolean subtraction, material-carrying smooth union, hex prisms, cosine palettes. Adds single scattering along the view ray for light shafts \u2014 a per-pixel integral, so tiled export stays byte-identical where a post-process bloom would not. Scene SDF kept cheap so the volumetric can afford steps, the opposite trade from 005.",
+  "ref": {
+    "size": 110,
+    "draws": 2,
+    "spp": 2,
+    "frame": 0,
+    "seed": 0
+  },
+  "thumb": {
+    "draws": 4,
+    "spp": 4
+  }
+}
