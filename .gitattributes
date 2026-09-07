@@ -1,0 +1,18 @@
+# Line endings are load-bearing here, not a style preference.
+#
+# tools/fingerprint.ts hashes the raw bytes of basics/, visualization/build/ and
+# each piece's shaders into ref.json, and the sequence exporter's --resume guard
+# hashes shader bytes too. Git for Windows checks out CRLF by default, so
+# without this file the same commit yields different hashes on Windows than on
+# Linux: every reference image would report "basics/ has changed" on a fresh
+# clone, and --resume would refuse a directory it had rendered itself, both with
+# messages pointing at the wrong thing entirely.
+#
+# test/layers.test.ts asserts both that this file pins LF and that no source
+# file in the tree carries CRLF.
+* text=auto eol=lf
+
+# Reference and thumbnail images are compared byte for byte. Never touch them.
+*.png binary
+*.jpg binary
+*.mp4 binary

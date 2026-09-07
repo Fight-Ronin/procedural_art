@@ -1,7 +1,13 @@
 node_modules/
 dist/
-artwork/*/out/
 *.local
 .DS_Store
+
+# Renders. `out/` is where every export lands and a 4000px print is 30 MB, so it
+# does not travel with the repo — which is why `thumb.png` and `ref.png` sit in
+# the piece directory itself rather than in here.
+artwork/*/out/
 artwork/out/
+
+# Files delivered into the chat during a session, not repo content.
 Claude outputs/
