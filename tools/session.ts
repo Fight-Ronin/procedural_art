@@ -10,19 +10,11 @@ import { createServer, type ViteDevServer } from 'vite';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PaHook } from '../visualization/hook.ts';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export interface Tile {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** What visualization/main.ts exposes on window for headless driving. */
-export type Hook = PaHook;
+export type { Tile } from '../visualization/render/tile.ts';
+export type { PaHook as Hook } from '../visualization/hook.ts';
 
 export interface Session {
   server: ViteDevServer;
@@ -60,6 +52,43 @@ export async function launch(port = 5199): Promise<Session> {
 
   const origin = `http://localhost:${port}`;
 
+  /**
+   * Wait for the page's hook, and say what actually went wrong if it never
+   * appears.
+   *
+   * There are two places a shader can fail and they used to report very
+   * differently. A GLSL compile error reaches `window.__pa.error` and every
+   * tool prints it with the file and line — that path is good. But a failure in
+   * the Vite plugin (a bad `#include` path, or a uniform colliding with a viz
+   * built-in) happens BEFORE the module loads, so `window.__pa` is never
+   * defined at all and the wait simply expired: thirty seconds of nothing
+   * followed by `TimeoutError`, with the real message sitting in the server log
+   * where a CLI user never looks. Measured while writing 007, which declared a
+   * `uFrame` uniform: the refusal was correct, immediate and invisible.
+   *
+   * Vite reports these by injecting an error overlay into the DOM, so read it.
+   */
+  async function waitForHook(): Promise<void> {
+    try {
+      await page.waitForFunction(() => typeof window.__pa !== 'undefined', null, {
+        timeout: 30000,
+      });
+    } catch (e) {
+      const overlay = await page
+        .evaluate(() => {
+          const el = document.querySelector('vite-error-overlay');
+          const root = (el as unknown as { shadowRoot?: ShadowRoot } | null)?.shadowRoot;
+          return root?.querySelector('.message')?.textContent?.trim() ?? null;
+        })
+        .catch(() => null);
+      if (overlay) throw new Error(`the page failed to build:\n\n${overlay}`);
+      if (consoleErrors.length) {
+        throw new Error(`the page never initialised:\n  ${consoleErrors.join('\n  ')}`);
+      }
+      throw e;
+    }
+  }
+
   return {
     server,
     browser,
@@ -68,18 +97,14 @@ export async function launch(port = 5199): Promise<Session> {
     origin,
     async open(query: string) {
       await page.goto(`${origin}/${query}`, { waitUntil: 'load' });
-      await page.waitForFunction(() => typeof window.__pa !== 'undefined', null, {
-        timeout: 30000,
-      });
+      await waitForHook();
       // The animation loop would resize the canvas and step simulations between
       // evaluate() calls; callers drive every draw themselves.
       await page.evaluate(() => window.__pa.stopLoop());
     },
     async openLive(query: string) {
       await page.goto(`${origin}/${query}`, { waitUntil: 'load' });
-      await page.waitForFunction(() => typeof window.__pa !== 'undefined', null, {
-        timeout: 30000,
-      });
+      await waitForHook();
     },
     async close() {
       await browser.close();

@@ -18,6 +18,7 @@ import { blitTile, glTileOrigin, sampleCount, tiles } from '../visualization/ren
 import { renderStill, renderStillAt } from '../tools/export.ts';
 import { decodePng, encodePng, encodePng16, type Image16 } from '../tools/png.ts';
 import { launch } from '../tools/session.ts';
+import { pieceRefs } from '../tools/ref.ts';
 import { check, note, section, throwsWith } from './harness.ts';
 import { ROOT } from './paths.ts';
 
@@ -151,7 +152,16 @@ interface ExportCase {
   frame: number;
 }
 
-const CASES: ExportCase[] = [
+/**
+ * Per-piece overrides; anything not named here takes DEFAULTS below.
+ *
+ * This was the whole list, and a piece absent from it got NO tiled-identity
+ * check at all — silently, because the totals simply did not move. 007 was
+ * caught that way: it reads uFullRes directly to place its frame, which is
+ * exactly the sort of thing a tiled render breaks, and it was not being
+ * checked.
+ */
+const OVERRIDES: ExportCase[] = [
   // Tile sizes deliberately include ones that do not divide the output, and odd
   // ones that get rounded down — the short last row and column are where
   // off-by-ones live. 001 is the sensitive case: it is the only piece using
@@ -167,7 +177,19 @@ const CASES: ExportCase[] = [
   // that got uFullRes wrong would resolve the surface at a different precision
   // and differ from the untiled render everywhere, not just at the seams.
   { id: '005', size: 100, tileSizes: [100, 34, 37], draws: 2, spp: 2, frame: 0 },
+  // 006 jitters its volumetric samples with paRand(), so it is the piece that
+  // would break if the per-sample RNG were ever seeded from anything but the
+  // global pixel — a tile would then integrate the air differently.
+  { id: '006', size: 108, tileSizes: [108, 36, 41], draws: 2, spp: 2, frame: 0 },
 ];
+
+/** Sizes that are not multiples of the tile, so short rows and columns happen. */
+const DEFAULTS = { size: 120, tileSizes: [120, 40, 43], draws: 2, spp: 2, frame: 0 };
+
+const CASES = pieceRefs().map((p) => {
+  const over = OVERRIDES.find((o) => o.id === p.id);
+  return { ...DEFAULTS, id: p.id, ...(over ?? {}) };
+});
 
 const only = process.argv.slice(2).filter((a) => /^\d{3}$/.test(a));
 const ACTIVE = only.length ? CASES.filter((c) => only.includes(c.id)) : CASES;

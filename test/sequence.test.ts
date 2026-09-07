@@ -17,6 +17,7 @@ import { manifestConflicts, type Manifest } from '../tools/manifest.ts';
 import { decodePng, encodePng, type Image } from '../tools/png.ts';
 import { frameCount, renderSequence } from '../tools/sequence.ts';
 import { launch, ROOT } from '../tools/session.ts';
+import { pieceRefs } from '../tools/ref.ts';
 import { check, note, section, skip, throwsMessage } from './harness.ts';
 
 section('sequence');
@@ -123,6 +124,18 @@ interface SeqCase {
   draws: number;
 }
 
+/**
+ * THREE PIECES ON PURPOSE, unlike the render and export suites, which cover
+ * every piece and used to only look like they did.
+ *
+ * What is under test here is a mechanism, not an artwork: that rendering a
+ * sequence by STEPPING and rendering one frame by SEEKING produce identical
+ * bytes. That can only go wrong where something is CARRIED between frames, so
+ * the list is one case per kind of carried thing, and a fourth piece of a kind
+ * already covered would cost a minute of rendering and prove nothing new. The
+ * check below pins that every id still exists, so a rename cannot quietly turn
+ * this into fewer cases.
+ */
 const CASES: SeqCase[] = [
   // 001 is the only piece using fwidth, so it is the one that would show a
   // tiling regression; it is also stateless, which makes stepping and seeking
@@ -132,10 +145,31 @@ const CASES: SeqCase[] = [
   // from the seed, stepping carries it forward, and only one of those is what
   // the sequence does.
   { id: '003', size: 96, tile: 40, start: 4, count: 3, spp: 1, draws: 1 },
+  // 006 is the only piece with BLOOM — the second thing carried between frames,
+  // and the one nothing was checking. The halo is built once per frame and
+  // cached, so a cache key that lost the frame would leave a whole video
+  // wearing frame 0's glow. Every other suite renders one frame at a time and
+  // could never see it.
+  //
+  // MEASURED WHICH CHECK ACTUALLY CATCHES IT, rather than assuming. Dropping
+  // `frame` from the key does NOT fail the step-versus-seek comparison, because
+  // both sides of that comparison end up holding the same stale halo. It fails
+  // "skipping a frame still advances past it": with a stale key the cache is
+  // order-dependent, so the same frame renders differently depending on which
+  // frames were rendered before it — which is exactly what a video suffers and
+  // a still never shows. Small numbers because it is the slowest piece here.
+  { id: '006', size: 64, tile: 26, start: 2, count: 3, spp: 1, draws: 1 },
 ];
 
 const only = process.argv.slice(2).filter((a) => /^\d{3}$/.test(a));
 const ACTIVE = only.length ? CASES.filter((c) => only.includes(c.id)) : CASES;
+
+{
+  const have = new Set(pieceRefs().map((p) => p.id));
+  const ghosts = CASES.filter((c) => !have.has(c.id)).map((c) => c.id);
+  check('the sequence cases name real pieces', ghosts.length === 0,
+    ghosts.length ? ghosts.join(', ') : `${CASES.map((c) => c.id).join(', ')}`);
+}
 
 const s = await launch(5205);
 const outDir = path.join(ROOT, 'artwork', 'out', 'seq-check');

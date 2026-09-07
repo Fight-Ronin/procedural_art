@@ -13,7 +13,7 @@
  */
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { buildPiece, DIR_PATTERN, type ShaderModule } from '../visualization/piece.ts';
+import { PA_TONEMAP, buildPiece, DIR_PATTERN, type ShaderModule } from '../visualization/piece.ts';
 import { launch, ROOT } from '../tools/session.ts';
 import { check, note, section, throwsMessage } from './harness.ts';
 
@@ -60,12 +60,43 @@ const FILES = { 'main.frag': shader('image') };
   );
   // A piece's parameters live where they are used — feed in the simulation,
   // contrast in the display — but the GUI and the URL hash need one flat set.
+  //
+  // The display rows come last and come from viz, not from any shader:
+  // exposure, tonemap and bloom are the resolve pass's business, declared in
+  // meta.json. They are ordinary parameters on purpose, which is what gets
+  // them a GUI row, a slot in the URL hash and a slot in a captured preset
+  // without a second mechanism.
+  const DISPLAY = 'uDisplayExposure,uBloomStrength,uBloomThreshold,uDisplayTonemap';
+  const names = p.params.map((s) => s.name).join(',');
   check('parameters from the image pass and the buffer passes are merged',
-    p.params.map((s) => s.name).join(',') === 'uContrast,uFeed',
-    p.params.map((s) => s.name).join(','));
+    names === `uContrast,uFeed,${DISPLAY}`, names);
+
+  // Every piece gets them, whether or not meta.json mentions display.
+  const bare = buildPiece('004-lattice', META, { 'main.frag': withParams('uContrast', 'image') });
+  check('a piece with no display block still gets the display transform',
+    bare.params.map((s) => s.name).join(',') === `uContrast,${DISPLAY}`,
+    bare.params.map((s) => s.name).join(','));
+  check('bloom is off unless the piece asks for it',
+    (bare.params.find((s) => s.name === 'uBloomStrength') as { def: number }).def === 0);
+  const tm = bare.params.find((s) => s.name === 'uDisplayTonemap');
+  check('the default transform is ACES at zero stops',
+    tm?.kind === 'enum' && tm.def === PA_TONEMAP.indexOf('aces') &&
+      (bare.params.find((s) => s.name === 'uDisplayExposure') as { def: number }).def === 0,
+    `tonemap def ${tm && 'def' in tm ? tm.def : '?'}`);
 }
 
 // --- the refusals ------------------------------------------------------------
+
+// The display block is the one part of meta.json a person types by hand and
+// gets wrong by typo, so it refuses by name rather than falling back silently.
+await throwsMessage('an unknown tonemap name is refused',
+  () => buildPiece('004-lattice', { ...META, display: { tonemap: 'filmic' } }, FILES),
+  'display.tonemap');
+
+await throwsMessage('an absurd exposure is refused',
+  () => buildPiece('004-lattice', { ...META, display: { exposure: 40 } }, FILES),
+  'display.exposure');
+
 
 await throwsMessage('a directory not named <id>-<slug> is refused',
   () => buildPiece('lattice', META, FILES), '<id>-<slug>');
@@ -88,6 +119,34 @@ await throwsMessage('a directory with no main.frag is refused',
 await throwsMessage('a main.frag that is a buffer pass is refused',
   () => buildPiece('004-lattice', META, { 'main.frag': shader('buffer') }),
   'image pass must be main.frag');
+
+// Presets are addressed by name everywhere — the GUI dropdown, every CLI's
+// --preset, meta.json's own `preset` field — so a duplicate name makes one of
+// them permanently unreachable, and the unreachable one is whichever was
+// captured second. That is the one you just made.
+await throwsMessage('two presets sharing a name are refused',
+  () => buildPiece('004-lattice', {
+    ...META,
+    presets: [{ name: 'dusk', values: {} }, { name: 'dusk', values: { uA: 1 } }],
+  }, FILES),
+  'two presets named "dusk"');
+
+await throwsMessage('a preset with no name is refused',
+  () => buildPiece('004-lattice', { ...META, presets: [{ values: {} }] }, FILES),
+  'preset with no name');
+
+// Without this the piece renders its defaults from every CLI at once, which is
+// indistinguishable from a piece that declared no preset at all.
+await throwsMessage('naming a default preset the piece does not have is refused',
+  () => buildPiece('004-lattice', {
+    ...META, preset: 'noon', presets: [{ name: 'dusk', values: {} }],
+  }, FILES),
+  'not one of its presets (dusk)');
+
+check('a piece may declare one of its own presets as the default',
+  buildPiece('004-lattice', {
+    ...META, preset: 'dusk', presets: [{ name: 'dusk', values: {} }],
+  }, FILES).meta.preset === 'dusk');
 
 // The one most likely to happen: renaming buffer-a.frag and forgetting meta.json.
 await throwsMessage('a pass naming a shader that is not there is refused, and lists what is',

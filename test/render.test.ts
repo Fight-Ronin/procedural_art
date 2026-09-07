@@ -9,6 +9,8 @@ import path from 'node:path';
 import { launch, ORIGIN } from './browser.ts';
 import { check, note, section } from './harness.ts';
 import { ROOT } from './paths.ts';
+import { pieceRefs } from '../tools/ref.ts';
+import { reduceLinear } from '../tools/tone.ts';
 
 interface PieceCheck {
   id: string;
@@ -44,16 +46,41 @@ interface PieceCheck {
   posterFrame: number;
 }
 
-const CHECKS: PieceCheck[] = [
+/**
+ * Per-piece overrides. Everything not named here takes DEFAULTS below.
+ *
+ * IT USED TO BE THE WHOLE LIST, and that was a silent hole: this suite, export
+ * and sequence each carried a hardcoded array, so a new piece got no
+ * resolution-independence check, no tiled-identity check and no step/seek
+ * check, and nothing said so — the totals simply did not move. Exactly the
+ * second-registry problem `test/pieces.test.ts` had when 004 was added, except
+ * that one went red and these three went quiet, which is worse. Discovered
+ * while adding 007: seven pieces, six covered.
+ *
+ * The entries stay because they carry real per-piece knowledge — a marcher's
+ * tolerance, a simulation's frame, why 006 needs a looser bound. What changed
+ * is that absence from this table means "ordinary", not "untested".
+ */
+const OVERRIDES: (Partial<PieceCheck> & { id: string })[] = [
   {
-    id: '001', dir: 'artwork/001-drift',
+    // 008 integrates a volume at up to 128 steps per ray, which makes it the
+    // most expensive piece here by a wide margin — the defaults would put the
+    // suite's poster render alone into the minutes. Small numbers, and a looser
+    // per-cell bound because the march start is jittered per sample, so at two
+    // samples the residual is honest Monte Carlo noise rather than a coupling.
+    id: '008',
+    small: 90, ratio: 3, spp: 2, compare: 30, tolerance: 7,
+    poster: 320, posterDraws: 2, posterSpp: 2, posterFrame: 0,
+  },
+  {
+    id: '001',
     small: 300, ratio: 3, spp: 1, compare: 60, tolerance: 3,
     poster: 900, posterDraws: 6, posterSpp: 4, posterFrame: 0,
   },
   {
     // Refractive raymarching on SwiftShader is slow; small numbers, and a
     // looser bound because the spectral sampling is stochastic.
-    id: '002', dir: 'artwork/002-vitreous',
+    id: '002',
     small: 132, ratio: 3, spp: 3, compare: 33, tolerance: 6,
     poster: 512, posterDraws: 12, posterSpp: 4, posterFrame: 0,
   },
@@ -63,7 +90,7 @@ const CHECKS: PieceCheck[] = [
     // Worley lookup. Small numbers throughout, and spp 1 — its supersampling
     // buys antialiasing rather than convergence, since nothing in it is
     // stochastic.
-    id: '004', dir: 'artwork/004-silt',
+    id: '004',
     small: 132, ratio: 3, spp: 1, compare: 33, tolerance: 4,
     poster: 420, posterDraws: 4, posterSpp: 2, posterFrame: 0,
   },
@@ -71,28 +98,100 @@ const CHECKS: PieceCheck[] = [
     // The first opaque lit piece, and the slowest per sample: ridged 3D noise
     // at every march step, plus AO and a soft shadow that each re-evaluate the
     // displaced field. Everything here is scaled to that.
-    id: '005', dir: 'artwork/005-scarp',
+    id: '005',
     small: 100, ratio: 3, spp: 1, compare: 25, tolerance: 5,
     poster: 280, posterDraws: 2, posterSpp: 2, posterFrame: 0,
+  },
+  {
+    // Cheap SDF, expensive volumetric — the opposite trade from 005, and worth
+    // having both in the net because they stress different things.
+    // The loosest per-cell tolerance in the suite, and the reason is measured
+    // rather than assumed: at spp 1 the difference was 5.66, and at spp 3 it was
+    // 5.62. Tripling the samples moved it by 0.04, so it is NOT Monte Carlo
+    // variance from the volumetric jitter — that was the first hypothesis and
+    // the experiment refused it.
+    //
+    // HALF OF IT WAS THE TEST. 006 sat at an overall level shift of 5.62/255
+    // that tripling the sample count barely moved, which ruled out Monte Carlo
+    // variance and was left unexplained. The cause was this suite reducing in
+    // sRGB: the encode is concave, so a bimodal patch averages darker than a
+    // smooth one carrying the same light, and 006 is bright columns against a
+    // dark vault. Reducing in linear light instead put it at 0.52.
+    //
+    // A THIRD OF IT WAS ALSO THE TEST, found later. 110 does not divide into 27
+    // cells, so the reduction's cell boundaries fell at 4.55% of the image
+    // height on the small render and 3.94% on the large one, and drifted apart
+    // across the grid — every cell compared a slightly different strip of a
+    // picture made of thin vertical columns. 006 was the only piece in the
+    // suite with a non-dividing pair, which is why it alone looked bad.
+    // `reduceLinear` now refuses that outright; 110 into 22 cells is exact on
+    // both sides (5px boxes and 15px boxes over identical regions).
+    //
+    // What remains is real: this piece has the thinnest geometry in the repo —
+    // hex prism columns and a slender ring seen at a distance — and both the
+    // marching tolerance and the normal epsilon are scaled by the pixel
+    // footprint on purpose, so a 110px render genuinely resolves those edges
+    // differently from a 330px one. That is cone tracing working, not failing.
+    // The per-cell bound has come down 7 -> 6 -> 4 as each measurement error
+    // left it; the observed value is 2.22.
+    id: '006',
+    small: 110, ratio: 3, spp: 3, compare: 22, tolerance: 4,
+    poster: 300, posterDraws: 2, posterSpp: 2, posterFrame: 0,
   },
   {
     // Stateful. The simulation grid is fixed at 384 texels on the short side,
     // so both resolutions in the comparison read the SAME field — which is the
     // whole point of sizing passes absolutely rather than as a fraction of the
     // display.
-    id: '003', dir: 'artwork/003-coalesce',
+    id: '003',
     small: 256, ratio: 3, spp: 1, compare: 64, tolerance: 4,
     poster: 768, posterDraws: 4, posterSpp: 2, posterFrame: 150,
     simFrame: 20,
   },
 ];
 
+/**
+ * A piece nobody wrote an entry for. Deliberately modest and deliberately
+ * strict: a new piece is checked at a real tolerance from the day it exists,
+ * and tightening or loosening it is then a decision someone makes on purpose.
+ */
+const DEFAULTS = {
+  small: 200, ratio: 3, spp: 2, compare: 50, tolerance: 3,
+  poster: 700, posterDraws: 4, posterSpp: 3, posterFrame: 0,
+};
+
+const CHECKS: PieceCheck[] = pieceRefs().map((p) => {
+  const over = OVERRIDES.find((o) => o.id === p.id) ?? { id: p.id };
+  return { ...DEFAULTS, dir: p.dir, ...over } as PieceCheck;
+});
+
+section('render');
+
+// The table may only name pieces that exist: a renamed or deleted directory
+// would otherwise leave an override that silently applies to nothing.
+{
+  // The reduction compares two renders cell by cell, which is only meaningful
+  // if a cell covers the same region of the picture in both. That needs
+  // `compare` to divide `small` exactly — `ratio` is an integer, so dividing
+  // the small side divides the large one too. 006 spent two rounds of
+  // investigation looking like a resolution-dependent artwork because of a pair
+  // that did not (110 into 27); `reduceLinear` refuses it now, but a refusal
+  // that surfaces as a crashed suite is a worse report than this line.
+  const misaligned = CHECKS
+    .filter((c) => c.small % c.compare !== 0)
+    .map((c) => `${c.id}: ${c.small} / ${c.compare}`);
+  check('every comparison reduces onto an aligned cell grid', misaligned.length === 0,
+    misaligned.join('; ') || CHECKS.map((c) => `${c.id} ${c.small}/${c.compare}`).join('  '));
+
+  const ghosts = OVERRIDES.filter((o) => !CHECKS.some((c) => c.id === o.id)).map((o) => o.id);
+  check('every render override names a real piece', ghosts.length === 0, ghosts.join(', '));
+  note(`${CHECKS.length} pieces, ${OVERRIDES.length} with overrides`);
+}
+
 // `npm test -- render 003` narrows to one piece; iterating on a slow stateful
 // simulation through the full suite is otherwise unbearable.
 const only = process.argv.slice(2).filter((a) => /^\d{3}$/.test(a));
 const ACTIVE = only.length ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS;
-
-section('render');
 
 const h = await launch();
 
@@ -184,38 +283,55 @@ for (const c of ACTIVE) {
   check(`${c.id} frame is not blank`, stats.max - stats.min > 30, JSON.stringify(stats));
   check(`${c.id} has no NaN`, !stats.nan);
 
-  const diff = await h.page.evaluate(
-    ({ n, k, spp, cmp }: { n: number; k: number; spp: number; cmp: number }) => {
-      const reduce = (px: number[], size: number, out: number): number[] => {
-        const f = size / out;
-        const acc = new Float64Array(out * out * 3);
-        for (let y = 0; y < size; y++) {
-          for (let x = 0; x < size; x++) {
-            const oy = Math.min(out - 1, Math.floor(y / f));
-            const ox = Math.min(out - 1, Math.floor(x / f));
-            for (let ch = 0; ch < 3; ch++) acc[(oy * out + ox) * 3 + ch] += px[(y * size + x) * 4 + ch];
-          }
-        }
-        const per = f * f;
-        return Array.from(acc, (v) => v / per);
-      };
-      const a = reduce(window.__pa.renderAt(n, n, 0, spp), n, cmp);
-      const b = reduce(window.__pa.renderAt(n * k, n * k, 0, spp), n * k, cmp);
-      let sum = 0;
-      let max = 0;
-      for (let i = 0; i < a.length; i++) {
-        const d = Math.abs(a[i] - b[i]);
-        sum += d;
-        if (d > max) max = d;
-      }
-      return { mean: sum / a.length, max };
-    },
-    { n: c.small, k: c.ratio, spp: c.spp, cmp: c.compare },
+  // Both renders happen in the page; the arithmetic happens HERE.
+  //
+  // It used to be a closure passed to page.evaluate, and that closure named its
+  // helpers — which the TypeScript loader rewrites to reference an `__name`
+  // helper that does not exist in the browser. The suite aborted at this line
+  // with `ReferenceError: __name is not defined`, taking 54 unrelated checks
+  // with it, and `run.ts`'s crash guard is the only reason the rest of the run
+  // survived. Pixel arithmetic has no reason to be in the page: render there,
+  // reduce here.
+  const small = await h.page.evaluate(
+    ({ n, spp }: { n: number; spp: number }) => window.__pa.renderAt(n, n, 0, spp),
+    { n: c.small, spp: c.spp },
   );
+  const large = await h.page.evaluate(
+    ({ n, spp }: { n: number; spp: number }) => window.__pa.renderAt(n, n, 0, spp),
+    { n: c.small * c.ratio, spp: c.spp },
+  );
+  const a = reduceLinear(small, c.small, c.compare);
+  const b = reduceLinear(large, c.small * c.ratio, c.compare);
+
+  let sum = 0;
+  let max = 0;
+  let ma = 0;
+  let mb = 0;
+  for (let i = 0; i < a.length; i++) {
+    const d = Math.abs(a[i] - b[i]);
+    sum += d;
+    if (d > max) max = d;
+    ma += a[i];
+    mb += b[i];
+  }
+  // Overall brightness of each, which is the STRUCTURAL claim. Per-cell
+  // differences can be legitimate: cone tracing resolves a surface to the
+  // precision the output can show, so a small render genuinely lacks detail a
+  // large one has, and reduction averages that detail rather than removing it.
+  // What must NOT differ is the picture's overall level — a marching tolerance
+  // or a normal epsilon coupled to resolution in the wrong way shifts that, and
+  // no amount of reduction hides it.
+  const diff = { mean: sum / a.length, max, level: Math.abs(ma - mb) / a.length };
+
+  const detail = `${c.small}px vs ${c.small * c.ratio}px reduced to ${c.compare}px: ` +
+    `mean ${diff.mean.toFixed(2)}  max ${diff.max.toFixed(1)}  ` +
+    `overall level differs by ${diff.level.toFixed(2)}/255`;
   check(`${c.id} is resolution independent (mean < ${c.tolerance}/255)`,
-    diff.mean < c.tolerance,
-    `${c.small}px vs ${c.small * c.ratio}px reduced to ${c.compare}px: ` +
-      `mean ${diff.mean.toFixed(2)}  max ${diff.max.toFixed(1)}`);
+    diff.mean < c.tolerance, detail);
+  // The tighter, and more meaningful, half. Local detail may differ; the
+  // picture's level may not.
+  check(`${c.id} renders at the same overall level at both resolutions`,
+    diff.level < 1.0, detail);
 
   // At the piece's own working frame, not frame 0: a reaction-diffusion field
   // at frame 0 is undifferentiated noise, and a parameter that shapes the
@@ -305,6 +421,46 @@ for (const c of ACTIVE) {
     presets: { name: string; values: Record<string, number> }[];
   };
   const saved = after.presets.find((p) => p.name === '__test__');
+  // --- bloom actually blooms -------------------------------------------------
+  //
+  // A piece that declares bloom must visibly differ with it turned off. Without
+  // this, a regression that silently zeroed the strength — a mis-set uniform, a
+  // halo never bound, a threshold nothing clears — would pass every other check
+  // in the suite, because the reference images would simply be regenerated
+  // around it.
+  //
+  // Only 006 declares one. That is itself the finding: bloom needs radiance
+  // above 1, and a piece lit by an environment rather than by a visible source
+  // does not have any. 002 and 005 were tried and measured flat.
+  {
+    const withBloom = pieceRefs().filter((p) => {
+      const m = JSON.parse(readFileSync(path.join(ROOT, p.dir, 'meta.json'), 'utf8'));
+      return (m.display?.bloom?.strength ?? 0) > 0;
+    });
+    note(`${withBloom.length} of ${pieceRefs().length} pieces declare bloom`);
+    for (const p of withBloom) {
+      await h.open(`?p=${p.id}`);
+      const px = async (strength: number) => {
+        await h.page.evaluate(
+          (v: number) => window.__pa.setParam('uBloomStrength', v), strength);
+        return h.page.evaluate(() => window.__pa.renderAt(120, 120, 0, 2));
+      };
+      const on = await px(-1); // clamps to the spec's minimum, which is 0
+      const off = await px(0);
+      const dflt = JSON.parse(readFileSync(path.join(ROOT, p.dir, 'meta.json'), 'utf8'))
+        .display.bloom.strength as number;
+      const lit = await px(dflt);
+      let diff = 0;
+      for (let i = 0; i < lit.length; i += 4) diff += Math.abs(lit[i] - off[i]);
+      const mean = diff / (lit.length / 4);
+      check(`${p.id} bloom changes the image`, mean > 1.0, `mean red delta ${mean.toFixed(2)}`);
+      let same = 0;
+      for (let i = 0; i < on.length; i += 4) same += Math.abs(on[i] - off[i]);
+      check(`${p.id} zero strength costs nothing`, same === 0,
+        `clamped-to-zero vs zero: ${same}`);
+    }
+  }
+
   check('capture writes a preset into meta.json',
     json.ok && saved?.values.uWarp === 1.23, json.error ?? JSON.stringify(saved));
   writeFileSync(metaPath, before); // leave the repo as we found it
