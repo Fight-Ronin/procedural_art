@@ -2,12 +2,42 @@
   "id": "005",
   "slug": "scarp",
   "title": "Scarp",
+  "display": {
+    "exposure": -0.1,
+    "tonemap": "aces"
+  },
   "date": "2026-09-06",
-  "tags": ["raymarch", "sdf", "brdf", "erosion", "3d-noise"],
-  "poster": { "frame": 0, "seed": 0 },
-  "video": { "seconds": 20, "fps": 60 },
-  "still": { "width": 4000, "height": 3000, "spp": 24 },
+  "tags": [
+    "raymarch",
+    "sdf",
+    "brdf",
+    "erosion",
+    "3d-noise"
+  ],
+  "poster": {
+    "frame": 0,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 20,
+    "fps": 60
+  },
+  "still": {
+    "width": 4000,
+    "height": 3000,
+    "spp": 24
+  },
   "presets": [],
   "notes": "The first opaque lit object. Forced basics/shade/brdf.glsl (Cook-Torrance over Lambert, energy-conserving) and basics/noise/noise3.glsl into existence: 002 marched glass and needed no shading model because glass is transmission, and every noise before this was 2D. Ridged 3D noise displaces the field, which destroys its Lipschitz bound and is why it marches at stepScale 0.5.",
-  "ref": { "size": 120, "draws": 2, "spp": 2, "frame": 0, "seed": 0 }
+  "ref": {
+    "size": 120,
+    "draws": 2,
+    "spp": 2,
+    "frame": 0,
+    "seed": 0
+  },
+  "thumb": {
+    "draws": 4,
+    "spp": 4
+  }
 }

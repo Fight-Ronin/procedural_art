@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { renderStill } from './export.ts';
 import { encodePng } from './png.ts';
+import { usePreset } from './preset.ts';
 import { pieceRefs } from './ref.ts';
 import { launch, ROOT } from './session.ts';
 
@@ -33,13 +34,36 @@ const SPP = 4;
 interface Meta {
   poster?: { frame?: number; seed?: number };
   still?: { width?: number; height?: number };
+  /**
+   * Per-piece thumbnail cost. A volumetric raymarcher can want fifteen minutes
+   * for the default thirty-two samples where a field piece wants eight seconds,
+   * and a gallery image is not worth either extreme — so the piece declares what
+   * it needs rather than every piece paying the slowest one's price.
+   */
+  thumb?: { draws?: number; spp?: number };
+  preset?: string;
+  presets?: { name: string; values: Record<string, unknown> }[];
 }
 
-const ids = process.argv.slice(2).filter((a) => /^\d{3}$/.test(a));
-const force = process.argv.includes('--force');
+const argv = process.argv.slice(2);
+// A flag's value is not a piece id, even when it looks like one.
+const ids = argv.filter((a, i) => /^\d{3}$/.test(a) && !(i > 0 && argv[i - 1].startsWith('--')));
+const force = argv.includes('--force');
+const presetFlag = argv.includes('--preset') ? argv[argv.indexOf('--preset') + 1] : undefined;
 const pieces = pieceRefs(ids.length ? ids : undefined);
 if (pieces.length === 0) {
   console.error(`no pieces match ${ids.join(', ')}`);
+  process.exit(2);
+}
+// One name cannot mean anything sensible across several pieces: presets are
+// per-piece, so `--preset dusk` over all eight would either refuse on the first
+// piece that lacks it or, worse, mean a different look in each one that has it.
+// Without the flag every piece uses whatever its own meta.json declares.
+if (presetFlag !== undefined && pieces.length !== 1) {
+  console.error(
+    `--preset names one piece's look, but ${pieces.length} pieces are selected;\n` +
+      '  pass a piece id too, or set "preset" in each meta.json',
+  );
   process.exit(2);
 }
 
@@ -60,6 +84,8 @@ try {
     const width = aspect >= 1 ? Math.round(SHORT * aspect) : SHORT;
     const height = aspect >= 1 ? SHORT : Math.round(SHORT / aspect);
     const frame = meta.poster?.frame ?? 0;
+    const draws = meta.thumb?.draws ?? DRAWS;
+    const spp = meta.thumb?.spp ?? SPP;
 
     await session.open(`?p=${p.id}`);
     const err = await session.page.evaluate(() => window.__pa.error);
@@ -69,14 +95,16 @@ try {
       continue;
     }
     await session.page.evaluate((s: number) => window.__pa.setSeed(s), meta.poster?.seed ?? 0);
+    const preset = await usePreset(session.page, meta, presetFlag, `thumbs ${p.id}`);
 
     const began = Date.now();
     const image = await renderStill(session.page, {
-      width, height, tile: 512, draws: DRAWS, spp: SPP, frame,
+      width, height, tile: 512, draws, spp, frame,
     });
     writeFileSync(out, encodePng(image));
     console.log(
-      `  ${p.id}  ${width}x${height}, frame ${frame}, ${DRAWS * SPP} samples  ->  ` +
+      `  ${p.id}  ${width}x${height}, frame ${frame}, ${draws * spp} samples` +
+        `${preset ? `, preset "${preset}"` : ''}  ->  ` +
         `${path.relative(ROOT, out)}  (${((Date.now() - began) / 1000).toFixed(1)}s)`,
     );
   }

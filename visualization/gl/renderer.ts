@@ -51,6 +51,16 @@ export class Renderer {
   readonly format: FloatFormat;
 
   private vao: WebGLVertexArrayObject | null;
+
+  /**
+   * The full-screen triangle every pass draws with.
+   *
+   * Exposed so the bloom pass can share it: a second VAO for the same three
+   * vertices would be one more thing to keep in step with nothing to gain.
+   */
+  get quadVao(): WebGLVertexArrayObject | null {
+    return this.vao;
+  }
   private accum: PingPong;
   private program: WebGLProgram | null = null;
   private uniforms: Uniforms | null = null;
@@ -161,6 +171,78 @@ export class Renderer {
    */
   ditherLsb = 1 / 255;
 
+  /**
+   * The display transform, set from the store each frame.
+   *
+   * Renderer fields rather than a store reference: the renderer has never known
+   * what a parameter is, and giving it one now would put the artwork's
+   * vocabulary inside the layer whose whole job is not to have it.
+   */
+  displayExposure = 0;
+  displayTonemap = 1;
+
+  /**
+   * The bloom halo and how much of it to add, in linear light.
+   *
+   * Strength 0 means the resolve never samples the texture, so a piece without
+   * bloom pays nothing — not even a bind.
+   */
+  bloomTex: WebGLTexture | null = null;
+  bloomStrength = 0;
+
+  /**
+   * The FULL output resolution, which under tiling is not the viewport.
+   *
+   * The resolve pass needs it to place a tile inside the halo, for the same
+   * reason it needs uTileOrigin for the dither: gl_FragCoord there is
+   * tile-local, so without both every tile would sample the same corner of the
+   * bloom and the seams would be spectacular.
+   */
+  outputRes: [number, number] = [1, 1];
+
+  /**
+   * Draw the artwork ONCE into `fbo` at `w` x `h`, outside the accumulator.
+   *
+   * The bloom source needs a whole frame at its own small size while the
+   * accumulator holds a tile at the output's size, so it cannot go through
+   * `accumulate`. Accumulation is explicitly off (uAccumEnable = 0) and the
+   * accumulator's own state is untouched, which is what lets this run in the
+   * middle of a progressive refinement without disturbing it.
+   */
+  drawFrameInto(
+    fbo: WebGLFramebuffer,
+    w: number,
+    h: number,
+    p: RenderParams,
+    spp: number,
+    applyExtra?: (u: Uniforms) => void,
+  ): void {
+    const { gl } = this;
+    if (!this.program || !this.uniforms) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(this.program);
+    gl.bindVertexArray(this.vao);
+
+    const u = this.uniforms;
+    u.vec2('uFullRes', w, h);
+    u.vec2('uTileOrigin', 0, 0);
+    u.float('uTime', p.time);
+    u.int('uFrame', p.frame);
+    u.int('uSeed', p.seed);
+    u.int('uSpp', Math.max(1, spp));
+    u.int('uSampleBase', 0);
+    u.int('uQuality', p.quality);
+    u.vec4('uMouse', p.mouse[0], p.mouse[1], p.mouse[2], p.mouse[3]);
+    u.int('uAccumTex', 0);
+    u.int('uAccumEnable', 0);
+    if (applyExtra) applyExtra(u);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
   /** Float target for the deep readback path; allocated only if it is used. */
   private deep: PingPong | null = null;
 
@@ -187,6 +269,17 @@ export class Renderer {
     this.resolveUniforms.float('uInvSamples', 1 / this.accumulated);
     this.resolveUniforms.vec2('uTileOrigin', tileOrigin[0], tileOrigin[1]);
     this.resolveUniforms.float('uDitherLsb', this.ditherLsb);
+    this.resolveUniforms.float('uDisplayExposure', this.displayExposure);
+    this.resolveUniforms.int('uDisplayTonemap', this.displayTonemap);
+    // Unit 1: unit 0 is the accumulator this pass is reading.
+    this.resolveUniforms.float('uBloomStrength', this.bloomTex ? this.bloomStrength : 0);
+    this.resolveUniforms.vec2('uFullRes', this.outputRes[0], this.outputRes[1]);
+    if (this.bloomTex && this.bloomStrength > 0) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.bloomTex);
+      this.resolveUniforms.int('uBloomTex', 1);
+      gl.activeTexture(gl.TEXTURE0);
+    }
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -240,6 +333,17 @@ export class Renderer {
       this.resolveUniforms.float('uInvSamples', 1 / this.accumulated);
       this.resolveUniforms.vec2('uTileOrigin', tileOrigin[0], tileOrigin[1]);
       this.resolveUniforms.float('uDitherLsb', this.ditherLsb);
+      this.resolveUniforms.float('uDisplayExposure', this.displayExposure);
+      this.resolveUniforms.int('uDisplayTonemap', this.displayTonemap);
+      // Unit 1: unit 0 is the accumulator this pass is reading.
+      this.resolveUniforms.float('uBloomStrength', this.bloomTex ? this.bloomStrength : 0);
+      this.resolveUniforms.vec2('uFullRes', this.outputRes[0], this.outputRes[1]);
+      if (this.bloomTex && this.bloomStrength > 0) {
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this.bloomTex);
+        this.resolveUniforms.int('uBloomTex', 1);
+        gl.activeTexture(gl.TEXTURE0);
+      }
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       const floats = new Float32Array(w * h * 4);

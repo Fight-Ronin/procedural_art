@@ -10,6 +10,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { renderStillAt } from './export.ts';
 import { encodePng, encodePng16, type Image, type Image16 } from './png.ts';
+import { chosenPreset, usePreset } from './preset.ts';
 import { launch, ROOT } from './session.ts';
 
 interface Args {
@@ -26,7 +27,7 @@ function parseArgs(argv: string[]): { piece: string; flags: Args } {
   }
   if (positional.length !== 1) {
     throw new Error('usage: render <piece-id> [--width N] [--height N] [--spp N] ' +
-      '[--draws N] [--tile N] [--frame N] [--seed N] [--depth 8|16] [--out path]');
+      '[--draws N] [--tile N] [--frame N] [--seed N] [--depth 8|16] [--preset name] [--out path]');
   }
   return { piece: positional[0], flags };
 }
@@ -43,6 +44,8 @@ const meta = JSON.parse(readFileSync(path.join(ROOT, dir, 'meta.json'), 'utf8'))
   still?: { width?: number; height?: number; spp?: number };
   poster?: { frame?: number; seed?: number };
   passes?: unknown[];
+  preset?: string;
+  presets?: { name: string; values: Record<string, unknown> }[];
 };
 
 const num = (name: string, fallback: number) =>
@@ -63,9 +66,13 @@ const depth = num('depth', 8) === 16 ? 16 : 8;
 // seeding, so the poster frame in meta.json is where the simulation has got to.
 const frame = num('frame', meta.poster?.frame ?? 0);
 const seed = num('seed', meta.poster?.seed ?? 0);
+// The preset belongs in the filename, or rendering two looks at the same size
+// silently leaves you with one file and no way to tell which look it holds.
+const chosen = chosenPreset(meta, flags.preset);
 const out = flags.out
   ? path.resolve(ROOT, flags.out)
-  : path.join(ROOT, dir, 'out', `still-${width}x${height}.png`);
+  : path.join(ROOT, dir, 'out',
+    `still-${width}x${height}${chosen ? `-${chosen.replace(/[^\w-]+/g, '_')}` : ''}.png`);
 
 const session = await launch(5211);
 try {
@@ -73,11 +80,15 @@ try {
   const err = await session.page.evaluate(() => window.__pa.error);
   if (err) throw new Error(`shader failed to compile:\n${err}`);
   await session.page.evaluate((s: number) => window.__pa.setSeed(s), seed);
+  // Before the render, not after: a stale preset must stop the run rather than
+  // waste ten minutes of tiles on the wrong picture.
+  const preset = await usePreset(session.page, meta, flags.preset, `render ${piece}`);
 
   const started = Date.now();
   process.stdout.write(
     `${piece}: ${width}x${height}, ${draws} x ${spp} = ${draws * spp} samples, ` +
-      `${tile}px tiles, ${depth}-bit, frame ${frame}\n`,
+      `${tile}px tiles, ${depth}-bit, frame ${frame}` +
+      `${preset ? `, preset "${preset}"` : ''}\n`,
   );
 
   const image = await renderStillAt(session.page, {

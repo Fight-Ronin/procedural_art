@@ -14,6 +14,11 @@
 // fbm gives a lumpy potato; folding it at zero gives channels and ridges, which
 // is what water leaves behind.
 
+// The display transform — exposure, tonemap, sRGB encode, dither — belongs to
+// viz's resolve pass and is declared in meta.json. mainImage returns LINEAR
+// RADIANCE and nothing else; values above 1 are meant to survive to be rolled
+// off after the samples are averaged, not clamped inside each one.
+
 #include "core/math.glsl"
 #include "sdf/prim3d.glsl"
 #include "sdf/ops.glsl"
@@ -24,7 +29,6 @@
 #include "shade/brdf.glsl"
 #include "env/sky.glsl"
 #include "color/spaces.glsl"
-#include "color/tonemap.glsl"
 
 uniform float uErode;     // @param 0.0 .. 0.5 = 0.22 "erosion depth"
 uniform float uErodeFreq; // @param 0.3 .. 4.0 = 1.35 "erosion scale"
@@ -48,7 +52,6 @@ uniform float uAmbient;   // @param 0.0 .. 3.0 = 0.80 "sky fill"
 uniform float uDist;      // @param 2.0 .. 7.0 = 4.30 "camera distance"
 uniform float uHeight;    // @param -0.5 .. 2.5 = 1.15 "camera height"
 uniform float uAo;        // @param 0.0 .. 1.0 = 0.75 "ambient occlusion"
-uniform float uExposure;  // @param -2.0 .. 2.0 = -0.10 "exposure"
 uniform float uVignette;  // @param 0.0 .. 1.0 = 0.35 "vignette"
 
 /**
@@ -145,7 +148,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         col = mix(col, envGradient(rd, uSkyDown, uSkyUp, sun, vec3(0.0), 0.0), haze * 0.55);
     }
 
-    col = colExposure(col, uExposure);
     col *= mix(1.0, smoothstep(1.25, 0.25, length(uv)), uVignette);
-    fragColor = vec4(colTonemapAces(col), 1.0);
+    fragColor = vec4(col, 1.0);
 }

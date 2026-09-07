@@ -12,6 +12,11 @@
 // raising spp buys smoother edges and finer rainbows at once. Three fixed RGB
 // taps — the usual shortcut — cannot produce a continuous fringe.
 
+// The display transform — exposure, tonemap, sRGB encode, dither — belongs to
+// viz's resolve pass and is declared in meta.json. mainImage returns LINEAR
+// RADIANCE and nothing else; values above 1 are meant to survive to be rolled
+// off after the samples are averaged, not clamped inside each one.
+
 #include "core/math.glsl"
 #include "sdf/prim3d.glsl"
 #include "sdf/ops.glsl"
@@ -19,7 +24,6 @@
 #include "raymarch/march.glsl"
 #include "env/sky.glsl"
 #include "optics/glass.glsl"
-#include "color/tonemap.glsl"
 
 // ---- shape ----
 uniform float uMajor;    // @param 0.4 .. 1.6 = 0.95 "ring radius"
@@ -48,7 +52,6 @@ uniform float uFov;      // @param 0.3 .. 1.6 = 0.72 "field of view"
 uniform float uDist;     // @param 2.0 .. 8.0 = 4.1 "camera distance"
 uniform float uSpin;     // @param 0.0 .. 0.3 = 0.05 "spin speed"
 uniform float uPitch;    // @param -1.2 .. 1.2 = 0.32 "camera pitch"
-uniform float uExposure; // @param -2.0 .. 3.0 = 0.4 "exposure"
 
 // The scene. march.glsl declares this as a prototype and calls it.
 float sceneSdf(vec3 p) {
@@ -156,6 +159,5 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         col = mix(transmitted * response, reflected, F);
     }
 
-    col = colTonemapAces(colExposure(col, uExposure));
     fragColor = vec4(col, 1.0);
 }

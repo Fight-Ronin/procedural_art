@@ -19,6 +19,16 @@ export interface Manifest {
   spp: number;
   draws: number;
   start: number;
+  /**
+   * Which named look these frames were rendered with, or null for the shader's
+   * declared defaults.
+   *
+   * A preset changes every pixel of every frame while leaving the shaders, the
+   * size and the sample counts identical — so it is invisible to every other
+   * field here, and resuming across a preset change would splice two different
+   * pictures together in exactly the way this file exists to prevent.
+   */
+  preset?: string | null;
   /** Content hashes of basics/, the generated preamble, and the piece's shaders. */
   sources: Fingerprint;
 }
@@ -38,6 +48,15 @@ export function manifestConflicts(want: Manifest, found: Manifest): string[] {
   key('spp', 'samples per draw');
   key('draws', 'draws');
   key('start', 'first frame');
+  // Normalised, because a manifest written before presets existed has no field
+  // at all and must not read as a conflict against a run that uses none.
+  const look = (m: Manifest) => m.preset ?? null;
+  if (look(want) !== look(found)) {
+    out.push(
+      `preset: frames say ${look(found) ?? 'the declared defaults'}, ` +
+        `this run wants ${look(want) ?? 'the declared defaults'}`,
+    );
+  }
   // Naming which side moved, not just that something did: "basics/ has changed"
   // is a sentence someone can act on, "the shaders have changed" is a shrug.
   out.push(...fingerprintDiff(found.sources, want.sources).map((s) => `${s} since those frames`));

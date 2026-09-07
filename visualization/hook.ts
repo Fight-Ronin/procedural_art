@@ -55,6 +55,24 @@ export interface PaHook {
   ): number[];
 
   setParam(name: string, value: number | number[] | boolean): void;
+  /**
+   * Apply a whole captured snapshot — a preset, or a saved URL hash — and
+   * report what did not land.
+   *
+   * Separate from `setParam` for two reasons. Colours are stored in presets as
+   * `"#rrggbb"`, which `setParam`'s signature cannot carry and only the store
+   * knows how to decode. And the store is deliberately forgiving: it drops
+   * names it does not recognise and clamps values into range, which is right
+   * for a pasted URL and wrong for a preset that is supposed to reproduce a
+   * picture exactly. Reporting the misses is what lets the CLI refuse instead
+   * of printing something subtly different.
+   *
+   * `changed` is measured as a round trip: apply, re-snapshot, compare. A value
+   * that survives is byte-identical in the snapshot it came from.
+   */
+  loadValues(values: Record<string, unknown>): { unknown: string[]; changed: string[] };
+  /** Current values in the exact form a captured preset stores them. */
+  snapshot(): Record<string, unknown>;
   setPaused(v: boolean): void;
   setSeed(n: number): void;
   stopLoop(): void;

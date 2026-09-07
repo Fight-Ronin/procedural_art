@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import { IncludeError, resolveIncludes, type ReadFile } from './build/include.ts';
-import { buildEntrySource, RESOLVE_SOURCE, USER_SPEC } from './build/preamble.ts';
+import { BLOOM_SOURCE, buildEntrySource, RESOLVE_SOURCE, USER_SPEC } from './build/preamble.ts';
 import { ParamParseError, parseBuffers, parseParams } from './params/schema.ts';
 
 /**
@@ -13,9 +13,24 @@ import { ParamParseError, parseBuffers, parseParams } from './params/schema.ts';
  * and (b) every included .glsl is registered with Vite's watcher, so editing
  * basics/noise/fbm.glsl hot-reloads every artwork that pulls it in.
  */
-/** Virtual module exposing viz's own resolve shader, includes already flattened. */
+/**
+ * Virtual modules for viz's OWN shaders, includes already flattened.
+ *
+ * A table rather than one constant each: these all want the same treatment —
+ * resolve the includes, register every dependency with the watcher so editing
+ * basics/color/spaces.glsl reloads them, hand back the same module shape as a
+ * .frag. Adding the bloom pass as a second copy of that block is how the second
+ * copy drifts from the first.
+ */
 export const RESOLVE_MODULE = 'virtual:pa-resolve';
-const RESOLVE_ID = `\0${RESOLVE_MODULE}`;
+export const BLOOM_MODULE = 'virtual:pa-bloom';
+const VIZ_SHADERS: Record<string, { module: string; source: string }> = {
+  '<resolve>': { module: RESOLVE_MODULE, source: RESOLVE_SOURCE },
+  '<bloom>': { module: BLOOM_MODULE, source: BLOOM_SOURCE },
+};
+const VIZ_BY_ID = new Map(
+  Object.entries(VIZ_SHADERS).map(([entry, v]) => [`\0${v.module}`, { entry, ...v }]),
+);
 
 export function glslPlugin(opts: { root: string }): Plugin {
   const root = path.resolve(opts.root);
@@ -34,12 +49,14 @@ export function glslPlugin(opts: { root: string }): Plugin {
     enforce: 'pre',
 
     resolveId(id) {
-      return id === RESOLVE_MODULE ? RESOLVE_ID : null;
+      const hit = Object.values(VIZ_SHADERS).find((v) => v.module === id);
+      return hit ? `\0${hit.module}` : null;
     },
 
     load(id) {
-      if (id !== RESOLVE_ID) return null;
-      const r = resolveIncludes(RESOLVE_SOURCE, '<resolve>', readBasics);
+      const viz = VIZ_BY_ID.get(id);
+      if (!viz) return null;
+      const r = resolveIncludes(viz.source, viz.entry, readBasics);
       for (const dep of r.deps) {
         if (dep.startsWith('<')) continue;
         const abs = path.resolve(root, dep);
@@ -48,7 +65,7 @@ export function glslPlugin(opts: { root: string }): Plugin {
       return `export default ${JSON.stringify({
         code: r.code,
         map: r.map,
-        entry: '<resolve>',
+        entry: viz.entry,
         kind: 'image',
         params: [],
         buffers: [],

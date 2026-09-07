@@ -2,6 +2,10 @@
   "id": "003",
   "slug": "coalesce",
   "title": "Coalesce",
+  "display": {
+    "exposure": 0.15,
+    "tonemap": "aces"
+  },
   "date": "2026-09-05",
   "tags": [
     "reaction-diffusion",
@@ -31,7 +35,7 @@
     "spp": 8
   },
   "presets": [],
-  "notes": "First stateful piece. Forced the pass chain: float ping-pong targets at their own resolution, substeps, an init step, and self-reading feedback. Simulation at half display resolution with detail recovered in the image pass — the print strategy for stateful work.",
+  "notes": "First stateful piece. Forced the pass chain: float ping-pong targets at their own resolution, substeps, an init step, and self-reading feedback. Simulation at half display resolution with detail recovered in the image pass \u2014 the print strategy for stateful work.",
   "ref": {
     "size": 160,
     "draws": 2,

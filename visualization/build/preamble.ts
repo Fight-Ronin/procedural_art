@@ -201,17 +201,43 @@ void main() {
 `;
 
 /**
- * The resolve pass: divide the accumulator by the sample count and encode.
+ * The resolve pass: average the accumulator, then apply the WHOLE display
+ * transform — exposure, tonemap, sRGB encode, dither — in that order.
  *
  * It goes through the include resolver like everything else so that
  * colLinearToSrgb has exactly ONE definition in the repo. Inlining the transfer
  * function here would be four lines and a silent drift waiting to happen.
+ *
+ * THE TONEMAP USED TO LIVE IN THE ARTWORK, and moving it here fixes a real bug
+ * rather than tidying one. Every piece ended `mainImage` with
+ * `colTonemapAces(...)`, so the curve was applied PER SAMPLE and the results
+ * were then averaged. Tonemaps are concave, so by Jensen the average of the
+ * mapped samples is darker than the map of the averaged samples — which means
+ * a pixel that is half bright edge and half dark background came out darker
+ * than the light arriving there, by an amount that depends on how the edge
+ * happened to fall across the sample pattern. That is the same mistake 007
+ * exposed in miniature, generalised to every radiometric piece.
+ *
+ * Two other things follow from the accumulator now holding real linear
+ * radiance rather than display-referred colour:
+ *
+ *   * the float targets finally carry the HDR headroom they were built for.
+ *     Before this, `mainImage` clamped to [0,1] before anything was summed, so
+ *     "values above 1.0 survive to be tonemapped" was true of the mechanism
+ *     and false of every piece using it.
+ *   * exposure and tonemap become adjustable AFTER the fact, on an image that
+ *     is already converged, which is what makes them useful.
+ *
+ * The transform is chosen per piece in meta.json's `display` block; viz turns
+ * that into two ordinary parameters, so the GUI, the URL hash and presets all
+ * carry it with no extra machinery.
  */
 export const RESOLVE_SOURCE = `#version 300 es
 precision highp float;
 
 #include "color/spaces.glsl"
 #include "color/dither.glsl"
+#include "color/tonemap.glsl"
 
 uniform sampler2D uAccum;
 uniform float uInvSamples;
@@ -222,13 +248,137 @@ uniform vec2 uTileOrigin;
 // One output step, in display units. Zero disables dithering entirely.
 uniform float uDitherLsb;
 
+// The display transform. 0 none, 1 ACES, 2 Reinhard — see PA_TONEMAP in
+// visualization/piece.ts, which is the one place the names are mapped.
+uniform float uDisplayExposure;
+uniform int   uDisplayTonemap;
+
+// Bloom, added in linear light before the transform. The texture is a whole
+// frame at an absolute size, identical for every tile — see BLOOM_SOURCE.
+uniform sampler2D uBloomTex;
+uniform float uBloomStrength;
+// Needed to place this tile within the full frame. Zero strength means the
+// texture is never sampled, so a piece without bloom pays nothing.
+uniform vec2 uFullRes;
+
 out vec4 pa_fragColor;
+
+/**
+ * Bilinear read, CLAMPED at the edges.
+ *
+ * By hand because RGBA32F is not filterable, and clamped rather than wrapped
+ * because the preamble's paBilinear is toroidal — right for a simulation on a
+ * torus, wrong here, where it would spill a bright right edge onto the left of
+ * the picture.
+ */
+vec3 resolveBloom(vec2 uv) {
+    vec2 res = vec2(textureSize(uBloomTex, 0));
+    vec2 p = uv * res - 0.5;
+    vec2 f = fract(p);
+    ivec2 i = ivec2(floor(p));
+    ivec2 hi = ivec2(res) - 1;
+    vec3 a = texelFetch(uBloomTex, clamp(i + ivec2(0, 0), ivec2(0), hi), 0).rgb;
+    vec3 b = texelFetch(uBloomTex, clamp(i + ivec2(1, 0), ivec2(0), hi), 0).rgb;
+    vec3 c = texelFetch(uBloomTex, clamp(i + ivec2(0, 1), ivec2(0), hi), 0).rgb;
+    vec3 d = texelFetch(uBloomTex, clamp(i + ivec2(1, 1), ivec2(0), hi), 0).rgb;
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
 
 void main() {
     vec4 s = texelFetch(uAccum, ivec2(gl_FragCoord.xy), 0) * uInvSamples;
-    vec3 display = colLinearToSrgb(s.rgb);
+
+    if (uBloomStrength > 0.0) {
+        // The ABSOLUTE pixel, exactly like the dither: a tile's gl_FragCoord is
+        // tile-local, so sampling on it would give every tile the top-left
+        // corner of the halo.
+        vec2 uv = (floor(gl_FragCoord.xy) + 0.5 + uTileOrigin) / uFullRes;
+        s.rgb += uBloomStrength * resolveBloom(uv);
+    }
+
+    vec3 lin = colExposure(s.rgb, uDisplayExposure);
+    if (uDisplayTonemap == 1)      lin = colTonemapAces(lin);
+    else if (uDisplayTonemap == 2) lin = colTonemapReinhard(lin, 2.0);
+    // 0 leaves it alone. That is the right answer for a piece whose colours are
+    // already display-referred — a flat graphic has no highlight to roll off,
+    // and running a concave curve over its coverage blending is exactly the
+    // resolution-dependent ink the tonemap note above describes.
+
+    vec3 display = colLinearToSrgb(lin);
     display = colDither(display, floor(gl_FragCoord.xy) + uTileOrigin, uDitherLsb);
     pa_fragColor = vec4(display, s.a);
+}
+`;
+
+/**
+ * The bloom pass: extract highlights, then blur them, on a SMALL WHOLE-FRAME
+ * target whose size is absolute.
+ *
+ * Post-processing and tiled export are in genuine conflict — a spatial kernel
+ * reads neighbouring pixels, so a tile cannot be rendered independently and
+ * byte-identical export stops being true. The way out is the move this repo
+ * already made for simulation grids: size the buffer in TEXELS ON THE SHORT
+ * SIDE, absolutely, and render it once for the whole frame before any tile.
+ * Every tile then samples the identical texture, so nothing a tile can observe
+ * changes with the tiling, and the guarantee survives intact.
+ *
+ * It costs an approximation, and the approximation is free: bloom is a wide,
+ * low-frequency halo. Computing it from a 256px render of the frame and
+ * sampling it bilinearly at 4000px is what production renderers do with a mip
+ * pyramid, for the same reason. What it buys is that the halo is identical at
+ * every output size — the same resolution-independence argument as basics/aa,
+ * arrived at from the opposite direction.
+ *
+ * Weights are the binomial (1,4,6,4,1)/16, applied separably. Taps land on
+ * exact texel centres because the targets are NEAREST — RGBA32F is not
+ * filterable — so the stride is in whole texels and doubles per iteration.
+ */
+export const BLOOM_SOURCE = `#version 300 es
+precision highp float;
+
+#include "color/spaces.glsl"
+
+uniform sampler2D uSrc;
+// Sample offset in TEXELS: (stride, 0) horizontally then (0, stride).
+uniform vec2  uStep;
+// 1 on the first pass, which keeps only what is above the threshold.
+uniform int   uExtract;
+uniform float uThreshold;
+// The source is drawn with several samples per pixel and the epilogue writes
+// their SUM, so the extract pass divides. A stochastic piece rendered at one
+// sample would have its halo built out of speckle — thresholding noise keeps
+// whichever samples happened to land bright, which is a bias, not a highlight.
+uniform float uInvSamples;
+
+out vec4 pa_fragColor;
+
+void main() {
+    vec2 res = vec2(textureSize(uSrc, 0));
+    vec2 uv = gl_FragCoord.xy / res;
+
+    if (uExtract == 1) {
+        vec3 c = texture(uSrc, uv).rgb * uInvSamples;
+        // Scale by how far the luminance is over the threshold rather than
+        // subtracting per channel, which would shift the hue of every
+        // highlight towards whichever channel happened to be brightest.
+        //
+        // LINEAR luminance, not Oklab lightness. Oklab is a cube root of the
+        // radiance, built to describe what a display can show, so it squashes
+        // precisely the above-1 range a highlight occupies: 008's hottest cores
+        // read 1.88 in linear red and 1.15 in Oklab L, and thresholding the
+        // latter at 1.0 kept a thirteenth of the energy — a halo measurably
+        // indistinguishable from none.
+        float l = colLumaLinear(c);
+        pa_fragColor = vec4(c * (max(l - uThreshold, 0.0) / max(l, 1.0e-4)), 1.0);
+        return;
+    }
+
+    vec2 d = uStep / res;
+    vec3 sum = texture(uSrc, uv - 2.0 * d).rgb * 0.0625
+             + texture(uSrc, uv - d).rgb       * 0.25
+             + texture(uSrc, uv).rgb           * 0.375
+             + texture(uSrc, uv + d).rgb       * 0.25
+             + texture(uSrc, uv + 2.0 * d).rgb * 0.0625;
+    pa_fragColor = vec4(sum, 1.0);
 }
 `;
 

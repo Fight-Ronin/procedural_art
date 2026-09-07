@@ -1,11 +1,14 @@
+import bloomShader from 'virtual:pa-bloom';
 import resolveShader from 'virtual:pa-resolve';
 import { ShaderCompileError } from './gl/program.ts';
+import { Bloom } from './gl/bloom.ts';
 import { Renderer, defaultParams } from './gl/renderer.ts';
 import { PassChain } from './graph/chain.ts';
 import type { PaHook } from './hook.ts';
 import { glTileOrigin } from './render/tile.ts';
 import { Gui, type Preset } from './params/gui.ts';
 import { ParamStore } from './params/store.ts';
+import { bloomSetup } from './piece.ts';
 import { PIECES, pickPiece, type Piece } from './pieces.ts';
 import { Clock } from './time/clock.ts';
 
@@ -15,6 +18,8 @@ const overlay = document.getElementById('error') as HTMLPreElement;
 const renderer = new Renderer(canvas);
 renderer.setResolve(resolveShader);
 const chain = new PassChain(renderer.gl);
+const bloom = new Bloom(renderer.gl, renderer.quadVao);
+bloom.setShader(bloomShader);
 const clock = new Clock(60);
 
 /**
@@ -28,6 +33,13 @@ const MAX_CATCHUP = 4;
 
 let piece = pickPiece(location.search);
 const store = new ParamStore(piece.params);
+
+// Structural bloom settings come from meta.json, not from the store: they
+// decide how much buffer is allocated, which is a different kind of decision
+// from how much halo to add.
+const bloomCfg = bloomSetup(piece.meta.display);
+bloom.size = bloomCfg.size;
+bloom.iterations = bloomCfg.iterations;
 const presets: Preset[] = piece.meta.presets ?? [];
 const builtins = { seed: 0, spp: 1, quality: 0, paused: false };
 const mouse: [number, number, number, number] = [0, 0, 0, 0];
@@ -131,7 +143,63 @@ function applyAll(u: import('./gl/program.ts').Uniforms): void {
   chain.bind(u, piece.shader.buffers, 1);
 }
 
+/**
+ * Push the display transform to the renderer.
+ *
+ * These two live in the store like any parameter — so the GUI, the URL hash and
+ * presets carry them — but they are consumed by the resolve pass, which runs
+ * after the artwork and does not go through `applyAll`. Called before every
+ * present, including the export paths, so a still and the preview cannot end up
+ * with different transforms.
+ */
+function syncDisplay(fullW: number, fullH: number): void {
+  renderer.displayExposure = (store.get('uDisplayExposure') as number) ?? 0;
+  renderer.displayTonemap = (store.get('uDisplayTonemap') as number) ?? 1;
+  renderer.outputRes = [fullW, fullH];
+  renderer.bloomStrength = (store.get('uBloomStrength') as number) ?? 0;
+  renderer.bloomTex = null;
+}
+
+/**
+ * Build the bloom halo for this frame, if the piece asks for one.
+ *
+ * MUST run after the simulation is standing on the right frame and before the
+ * present that reads it — and once for the WHOLE FRAME, never per tile, which
+ * is the entire reason a tiled export stays byte-identical. `paramsFor` is
+ * given the full output size at every call site, so the halo is the same
+ * whether the caller then draws one tile or the lot.
+ */
+let lastBloomKey = '';
+
+function buildBloom(p: ReturnType<typeof paramsFor>): void {
+  if (renderer.bloomStrength <= 0 || !bloom.ready) return;
+  bloom.resize(p.fullRes[0], p.fullRes[1]);
+  // The halo is a whole-frame object, so every tile of one frame wants the
+  // identical texture — building it per tile would be correct and sixteen
+  // times the work on a 4x4 plan. Keyed on everything that can change it;
+  // p.viewport and p.tileOrigin are deliberately absent, which is the same
+  // statement as "a tile cannot observe the bloom".
+  const key = [
+    piece.id, p.fullRes[0], p.fullRes[1], p.frame, p.seed, p.quality,
+    store.revision, bloom.size, bloom.iterations, simStep,
+  ].join('|');
+  if (key !== lastBloomKey) {
+    lastBloomKey = key;
+    bloom.build(
+      (w, h, fbo, spp) => renderer.drawFrameInto(fbo, w, h, p, spp, applyAll),
+      (store.get('uBloomThreshold') as number) ?? 1,
+    );
+  }
+  renderer.bloomTex = bloom.texture;
+}
+
 function paramsFor(w: number, h: number) {
+  // Every render path — live draw, still, tile, deep tile — goes through here,
+  // which makes it the one place the display transform can be pushed without
+  // five call sites to keep in step. It is a side effect in a function that
+  // reads like a pure one, and that is the trade: a missed site would give the
+  // preview and the export different transforms, silently.
+  syncDisplay(w, h);
   const p = defaultParams(w, h);
   p.time = clock.time;
   p.frame = clock.frame;
@@ -253,9 +321,11 @@ function draw(): void {
   // paused, batches pile up and the picture refines — which is what makes a
   // noisy piece like 002 usable, and keeps each draw short enough that the
   // driver's watchdog never sees a long one.
+  const p = paramsFor(canvas.width, canvas.height);
   if (renderer.samples === 0 || (builtins.paused && renderer.samples < MAX_SAMPLES)) {
-    renderer.accumulate(paramsFor(canvas.width, canvas.height), applyAll);
+    renderer.accumulate(p, applyAll);
   }
+  buildBloom(p);
   renderer.present(canvas.width, canvas.height);
   gui.setStatus(
     `${renderer.samples} spp · ${renderer.format.name}` +
@@ -381,7 +451,11 @@ const hook = {
       builtins.spp = spp;
       builtins.quality = spp > 1 ? 1 : 0;
       place(w, h, frame);
-      renderer.render(paramsFor(w, h), applyAll);
+      const p = paramsFor(w, h);
+      renderer.reset();
+      renderer.accumulate(p, applyAll);
+      buildBloom(p);
+      renderer.present(w, h);
       return Array.from(renderer.readPixels(w, h));
     },
     /**
@@ -398,6 +472,7 @@ const hook = {
       renderer.reset();
       const p = paramsFor(w, h);
       for (let i = 0; i < draws; i++) renderer.accumulate(p, applyAll);
+      buildBloom(p);
       renderer.present(w, h);
       return Array.from(renderer.readPixels(w, h));
     },
@@ -459,6 +534,7 @@ const hook = {
       for (let i = 0; i < draws; i++) renderer.accumulate(p, applyAll);
       // The resolve pass dithers, and its dither is keyed on the absolute
       // pixel — so it needs the same origin the artwork pass got.
+      buildBloom(p);
       renderer.present(tile.w, tile.h, p.tileOrigin);
       return Array.from(renderer.readPixels(tile.w, tile.h));
     },
@@ -488,6 +564,7 @@ const hook = {
       p.tileOrigin = glTileOrigin(tile, fullH);
       renderer.reset();
       for (let i = 0; i < draws; i++) renderer.accumulate(p, applyAll);
+      buildBloom(p);
       return Array.from(renderer.readDeep(tile.w, tile.h, p.tileOrigin));
     },
     get samples() {
@@ -544,6 +621,29 @@ const hook = {
     },
     setParam(name: string, value: number | number[] | boolean) {
       store.set(name, value);
+    },
+    snapshot() {
+      return store.snapshot();
+    },
+    loadValues(values: Record<string, unknown>) {
+      const known = new Set(store.specs.map((s) => s.name));
+      const unknown = Object.keys(values).filter((n) => !known.has(n));
+      store.load(values as never);
+
+      // The round trip is the test. `snapshot()` is the exact form a preset was
+      // captured in, so a value that reproduces comes back identical to the one
+      // asked for; anything clamped, rounded or dropped through an enum comes
+      // back different. Comparing this way covers all three without the caller
+      // needing to know the coercion rules for each parameter kind.
+      const after = store.snapshot();
+      const same = (a: unknown, b: unknown) =>
+        typeof a === 'string' && typeof b === 'string'
+          ? a.toLowerCase() === b.toLowerCase() // hex colours, either case
+          : JSON.stringify(a) === JSON.stringify(b);
+      const changed = Object.keys(values).filter(
+        (n) => known.has(n) && !same(after[n], values[n]),
+      );
+      return { unknown, changed };
     },
     dataURL() {
       return canvas.toDataURL('image/png');

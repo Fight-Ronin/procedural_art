@@ -58,6 +58,9 @@ const SAMPLER_DECL =
 const RESERVED = new Set([
   'uFullRes', 'uTileOrigin', 'uTime', 'uFrame', 'uSeed', 'uSpp', 'uSampleBase', 'uQuality',
   'uMouse', 'uAccumTex', 'uAccumEnable', 'uInit', 'uSubstep', 'uSubsteps',
+  // Owned by the resolve pass, declared from meta.json's `display` block.
+  'uDisplayExposure', 'uDisplayTonemap', 'uBloomStrength', 'uBloomThreshold',
+  'uBloomTex',
 ]);
 
 /** `uWarpAmount` -> `warp amount` */

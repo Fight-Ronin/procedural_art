@@ -12,10 +12,14 @@
 // reconstruction of the field plus procedural grain evaluated at full
 // resolution. This is the print strategy for every stateful piece in the repo.
 
+// The display transform — exposure, tonemap, sRGB encode, dither — belongs to
+// viz's resolve pass and is declared in meta.json. mainImage returns LINEAR
+// RADIANCE and nothing else; values above 1 are meant to survive to be rolled
+// off after the samples are averaged, not clamped inside each one.
+
 #include "core/math.glsl"
 #include "noise/fbm.glsl"
 #include "color/palette.glsl"
-#include "color/tonemap.glsl"
 
 uniform sampler2D uField;  // @buffer a "chemical field"
 
@@ -32,7 +36,6 @@ uniform vec3  uHot;       // @color = #f2e6c8 "highlight"
 uniform float uGrain;     // @param 0.0 .. 1.0 = 0.22 "grain"
 uniform float uGrainScale;// @param 4.0 .. 200.0 = 64.0 "grain scale"
 uniform float uVignette;  // @param 0.0 .. 1.0 = 0.4 "vignette"
-uniform float uExposure;  // @param -2.0 .. 2.0 = 0.15 "exposure"
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = paUv(fragCoord);
@@ -69,6 +72,5 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     col *= 1.0 - uVignette * sat(dot(p, p) * 1.1);
 
-    col = colTonemapAces(colExposure(col, uExposure));
     fragColor = vec4(col, 1.0);
 }

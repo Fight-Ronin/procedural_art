@@ -19,13 +19,17 @@
 // and at 8000px, and the piece tiles bit-identically because it is still a pure
 // function of (position, frame, seed).
 
+// The display transform — exposure, tonemap, sRGB encode, dither — belongs to
+// viz's resolve pass and is declared in meta.json. mainImage returns LINEAR
+// RADIANCE and nothing else; values above 1 are meant to survive to be rolled
+// off after the samples are averaged, not clamped inside each one.
+
 #include "core/math.glsl"
 #include "field/flow.glsl"
 #include "noise/worley.glsl"
 #include "noise/fbm.glsl"
 #include "color/palette.glsl"
 #include "color/spaces.glsl"
-#include "color/tonemap.glsl"
 
 uniform float uFlowScale;  // @param 0.2 .. 4.0 = 1.15 "eddy size"
 uniform float uFlowAmp;    // @param 0.0 .. 2.0 = 0.85 "flow strength"
@@ -47,7 +51,6 @@ uniform vec3  uDeep;       // @color = #10131c "deep"
 uniform vec3  uSilt;       // @color = #7d6a52 "silt"
 uniform vec3  uPale;       // @color = #e8dcc4 "pale"
 uniform float uSpread;     // @param 0.2 .. 3.0 = 1.35 "tonal spread"
-uniform float uExposure;   // @param -2.0 .. 2.0 = 0.25 "exposure"
 uniform float uVignette;   // @param 0.0 .. 1.0 = 0.42 "vignette"
 
 /**
@@ -59,7 +62,7 @@ uniform float uVignette;   // @param 0.0 .. 1.0 = 0.42 "vignette"
  * inside, and it still looks properly irregular.
  */
 float siltField(vec2 p, int seed) {
-    WorleyF w = nzWorley21f(p * uCellScale, uJitter, seed);
+    NzWorleyF w = nzWorley21f(p * uCellScale, uJitter, seed);
     float walls = 1.0 - sat((w.f2 - w.f1) * 1.6);
     float bodies = sat(1.0 - w.f1 * 1.35);
     return mix(bodies, walls, uWall);
@@ -175,9 +178,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // rather than as a lighter patch of the same paint.
     col = colMixOklab(col, uPale, sat(grain * 0.9));
 
-    col = colExposure(col, uExposure);
     float r = length(p * vec2(1.0, 1.0));
     col *= mix(1.0, smoothstep(1.15, 0.15, r), uVignette);
 
-    fragColor = vec4(colTonemapAces(col), 1.0);
+    fragColor = vec4(col, 1.0);
 }

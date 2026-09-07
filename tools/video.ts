@@ -19,6 +19,7 @@ import { CODECS, ffmpegArgs, ffmpegCommand, evenSize, findFfmpeg, type Codec, ty
   from './encode.ts';
 import { fingerprint } from './fingerprint.ts';
 import { manifestConflicts, type Manifest } from './manifest.ts';
+import { chosenPreset, usePreset } from './preset.ts';
 import { encodePng, type Image } from './png.ts';
 import { frameCount, renderSequence } from './sequence.ts';
 import { launch, ROOT } from './session.ts';
@@ -28,13 +29,15 @@ interface Meta {
   video?: { seconds?: number; fps?: number; width?: number; height?: number };
   still?: { width?: number; height?: number };
   passes?: unknown[];
+  preset?: string;
+  presets?: { name: string; values: Record<string, unknown> }[];
 }
 
 const USAGE =
   'usage: video <piece-id> [--width N] [--height N] [--fps N] [--seconds N]\n' +
   '                        [--start N] [--frames N] [--spp N] [--draws N] [--tile N]\n' +
   `                        [--codec ${Object.keys(CODECS).join('|')}] [--crf N]\n` +
-  '                        [--pipe] [--no-encode] [--resume] [--out path]';
+  '                        [--preset name] [--pipe] [--no-encode] [--resume] [--out path]';
 
 const argv = process.argv.slice(2);
 const positional: string[] = [];
@@ -96,15 +99,22 @@ if (pipe && !encode) throw new Error('--pipe with --no-encode would render to no
 
 const outDir = path.join(ROOT, dir, 'out');
 const slug = meta.slug ?? dirName.replace(/^\d+-/, '');
-const framesDir = path.join(outDir, `frames-${width}x${height}`);
+// The preset is part of a frame directory's identity, not just its manifest.
+// Two looks rendered at the same size would otherwise share a directory, and
+// the second run would refuse to resume into the first's frames rather than
+// simply keeping them apart.
+const chosen = chosenPreset(meta, flags.preset);
+const tag = chosen ? `-${chosen.replace(/[^\w-]+/g, '_')}` : '';
+const framesDir = path.join(outDir, `frames-${width}x${height}${tag}`);
 const pattern = path.join(framesDir, 'frame-%05d.png');
 const framePath = (n: number) => path.join(framesDir, `frame-${String(n).padStart(5, '0')}.png`);
 const videoOut = flags.out
   ? path.resolve(ROOT, flags.out)
-  : path.join(outDir, `${slug}-${width}x${height}-${fps}fps.${CODECS[codec].ext}`);
+  : path.join(outDir, `${slug}-${width}x${height}${tag}-${fps}fps.${CODECS[codec].ext}`);
 
 const manifest: Manifest = {
   piece, width, height, fps, spp, draws, start,
+  preset: chosen,
   sources: fingerprint(ROOT, dir),
 };
 const manifestPath = path.join(framesDir, 'render.json');
@@ -140,6 +150,9 @@ try {
   await session.open(`?p=${piece}`);
   const err = await session.page.evaluate(() => window.__pa.error);
   if (err) throw new Error(`shader failed to compile:\n${err}`);
+  // Before any frame is rendered, and before the frames directory is touched:
+  // a stale preset must stop the run, not corrupt a resumable directory.
+  await usePreset(session.page, meta, flags.preset, `video ${piece}`);
 
   // The video's own directory, whichever mode we are in: in --pipe mode ffmpeg
   // opens the output itself and fails with nothing but "No such file or
