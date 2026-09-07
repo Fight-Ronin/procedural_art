@@ -2,6 +2,14 @@
 
 ## basics/ — the GLSL library
 
+Everything in this section is enforced by `test/layers.test.ts` rather than
+trusted: purity, the prefix table, `#pragma once`, includes that stay inside
+`basics/`, no TypeScript under `artwork/`, and exactly one undefined prototype
+in the whole library. A convention with no check is followed exactly as long as
+someone remembers it. Adding a directory under `basics/` means adding it to the
+prefix table there — the suite fails on a directory with no declared rule,
+because a directory with no rule is where the rule stops.
+
 **Pure functions only.** No reads of `uTime`, `uSeed`, `uFullRes` or any other
 uniform; no texture sampling. Anything a function needs is a parameter. This is
 not style — it is what lets the library move to WebGPU or desktop GL later with
@@ -64,9 +72,108 @@ artwork/00X-<slug>/
 No TypeScript in an artwork directory. If a piece seems to need some, that is a
 signal `visualization/` is missing a feature.
 
-**Write in art space.** Start from `artCoord(fragCoord)`. Take antialiasing
-widths from `fwidth()` of the quantity being thresholded, or from `pxSize()`.
-Never write a literal pixel count.
+**Write in art space.** Start from `artCoord(fragCoord)`. Never write a literal
+pixel count.
+
+**In the plane, take the footprint from `pxSize()`, not from a derivative.**
+An exact signed distance has |grad d| = 1, so the pixel footprint of the field
+is the pixel footprint of the plane:
+
+```glsl
+vec2  w  = artCoord(fragCoord) * uScale;
+float px = pxSize() * uScale;                 // exact, not estimated
+float ink = aaStep(sdSegment(w, a, b) - halfWidth, px);
+```
+
+That is only true of an EXACT distance, which is why `sdf/prim2d.glsl` is exact
+and why `test/sdf.test.ts` checks it against the definition rather than trusting
+the formula. `max()`-based booleans are not exact — they under-estimate, which
+is safe for the sign but means a clipped shape's value is no longer a width you
+can offset by.
+
+**`mainImage` returns LINEAR RADIANCE. It does not tonemap and does not apply
+exposure.** Both belong to viz's resolve pass, which runs once on the averaged
+accumulator, and the piece chooses them in `meta.json`:
+
+```json
+"display": { "exposure": 0.4, "tonemap": "aces" }
+```
+
+`tonemap` is `aces`, `reinhard` or `none`; an unknown name is refused by name
+rather than silently defaulted. Values above 1 are meant to survive — that is
+what the float accumulator is for — and clamping inside `mainImage` throws away
+exactly the highlights the transform exists to roll off.
+
+**Integrating a volume: own the loop, borrow the step.** `basics/volume`
+provides `volStep`, not an integrator, because an integrator would need your
+density and emission functions and GLSL has no function pointers — that would
+mean a second undefined prototype beside `sceneSdf`, which `test/layers.test.ts`
+forbids. Write the loop in the artwork:
+
+```glsl
+vec2 span = volSphereSpan(ro, rd, centre, radius);   // bound it, or most of
+if (span.y > span.x) {                                // the budget is empty space
+    float h = (span.y - max(span.x, 0.0)) / float(steps);
+    float s = max(span.x, 0.0) + h * paRand();        // jitter, or you get shells
+    for (...) { volStep(L, T, emission, sigma, h); if (T < 0.004) break; }
+}
+```
+
+Jitter the start with `paRand()`: marching from the same offset on every ray
+puts the step pattern into the picture as concentric shells, and jittering hands
+it to the sampling loop to average away. Emission is source radiance, not
+radiance per unit length — `volStep` has no sigma in its emission term on
+purpose, and putting one there is the first-order form that makes brightness
+depend on the step count.
+
+**`colLuma` is perceptual, `colLumaLinear` is radiometric.** Use the first for
+anything about how a colour looks, and the second whenever the question is how
+much light there is — thresholds, energy, exposure decisions. Oklab lightness is
+a cube root, so it compresses the above-1 range to almost nothing, which is how
+the bloom threshold ended up discarding the highlights it existed to find.
+
+**Bloom is opt-in and only pays off with radiance above 1.** Add it to the same
+block:
+
+```json
+"display": { "tonemap": "aces",
+             "bloom": { "strength": 0.3, "threshold": 0.7, "size": 256, "iterations": 5 } }
+```
+
+`strength` and `threshold` are ordinary parameters, so they are draggable and
+captured; `size` and `iterations` are structural, like a pass grid, and decide
+how much buffer is allocated. `size` is **texels on the short side, absolute**,
+which is what keeps tiled export byte-identical and the halo the same shape at
+every output size — never make it a fraction of the output.
+
+Before adding it, check the piece actually has highlights. A scene lit by an
+environment rather than by a visible source rarely exceeds 1, and a threshold
+low enough to catch anything there produces haze over the whole frame instead
+of a glow. 002 and 005 were both tried and measured flat; 006 has a lamp in
+shot and glows.
+
+**Choose `none` for a flat graphic.** A composite of display-referred colours
+has no highlight to compress, and a concave curve over fractional coverage
+makes a half-covered pixel darker than half of a covered one — so the ink on
+the page becomes a function of output resolution. 007 measured 4.17/255 of
+drift with ACES and 1.13 without.
+
+**State edge and line widths in DOMAIN units, through `basics/aa`.** A width
+given in pixels is a width that changes when the output size changes, so the
+picture on a 4000px print is not the picture you approved at 900px.
+
+```glsl
+float bands = height * uBands;
+float line  = aaBand(aaRepeat(bands), uInkWidth, aaFootprint(bands));
+```
+
+`uInkWidth` is a fraction of the band spacing. `aaFootprint` takes the pixel
+footprint from the SMOOTH quantity, never from `aaRepeat`'s sawtooth, whose
+derivative is a delta function at every seam. The reflex to avoid is
+`smoothstep(0.0, fwidth(x) * k, x - h)`: it filters outward from the threshold
+and so grows the shape by half a pixel, which cost 001 a measured 1.76/255 of
+overall level between two resolutions. Where a thing genuinely is one pixel —
+a debug overlay, a screen-space grid — say so and say why.
 
 **`uQuality` must be constant across an accumulation run.** It changes the
 image, so samples taken at two settings cannot be averaged. The render loop
@@ -172,6 +279,26 @@ cleaner file comes out visibly grainier.
 `--depth 16` exists for a file something else will edit; the dither is what
 makes 8-bit safe to look at. The deep path resolves into RGBA32F, not RGBA16F:
 half-float's 10-bit mantissa is coarser than 16-bit integers near white.
+
+## Settling a visual question
+
+Render a contact sheet and look at it:
+
+```bash
+npm run sheet -- 007 uScale=6,9,13 uEmpty=0.12,0.28,0.45
+```
+
+The first parameter varies across columns, the second down rows. Reach for this
+the moment you catch yourself reasoning about how a parameter will look. 004
+spent three rounds of theory on a smearing ratio that a 3x3 grid answered in
+five minutes; 007's cell scale and blank density were one command. **Do not
+prove an artwork.** Eyes are the right instrument for what the eye will judge,
+and they are an order of magnitude cheaper than derivation.
+
+The counterpart rule is that eyes are the WRONG instrument for whether a
+derivative is correct, whether a distance is exact, or whether ink is
+resolution-stable — every one of those produces a plausible picture when wrong.
+Those get probes.
 
 ## Testing the mathematics
 
