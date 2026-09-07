@@ -48,6 +48,14 @@ float quintic(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
 vec2  quintic(vec2 t)  { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
 vec3  quintic(vec3 t)  { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
 
+/**
+ * Value and gradient of quintic smoothstep. The interpolant's own derivative is
+ * needed because the lattice values are themselves being blended by it.
+ */
+vec2 quinticD(vec2 t) {
+    return 30.0 * t * t * (t * (t - 2.0) + 1.0);
+}
+
 /** Peaks at 1.0 when x == k, decays either side. IQ's exponential impulse. */
 float impulse(float x, float k) { float h = k * x; return h * exp(1.0 - h); }
 

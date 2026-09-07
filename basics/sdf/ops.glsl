@@ -9,7 +9,18 @@
 // step-limit notes in raymarch/march.glsl.
 
 float opUnion(float a, float b)     { return min(a, b); }
+
+/**
+ * CARVES `a` OUT OF `b`, in that order — the cutter first, the material second.
+ *
+ * Worth stating because it is the opposite of how the operation is usually
+ * written down ("b minus a") and the mistake is silent: swapping the arguments
+ * gives the INTERSECTION of a with the complement of b, which is a perfectly
+ * valid solid that simply is not the one you asked for. 006 lost a render to
+ * exactly that, and the shape it produced looked deliberate.
+ */
 float opSubtract(float a, float b)  { return max(-a, b); }
+
 float opIntersect(float a, float b) { return max(a, b); }
 
 /** Polynomial smooth minimum (IQ). k is the blend width in world units. */

@@ -203,8 +203,8 @@ ok = vec3(step(perp, 1e-5), step(lenErr, 1e-5), step(handed, 1e-4));
       includes: ['noise/worley.glsl'],
       body: `${POINT}
 int seed = int(pix.y) * int(n) + int(pix.x);
-WorleyF w3 = nzWorley21fr(sp, 1.0, seed, 3);
-WorleyF w0 = nzWorley21fr(sp, 1.0, seed, 0);
+NzWorleyF w3 = nzWorley21fr(sp, 1.0, seed, 3);
+NzWorleyF w0 = nzWorley21fr(sp, 1.0, seed, 0);
 ok = vec3(step(1e-6, abs(w0.f1 - w3.f1)), 1.0, 1.0);
 `,
     }, N);
@@ -226,9 +226,9 @@ ok = vec3(step(1e-6, abs(w0.f1 - w3.f1)), 1.0, 1.0);
       includes: ['noise/worley.glsl'],
       body: `${POINT}
 const float J = ${jitter.toFixed(2)};
-WorleyF wide = nzWorley21fr(sp, J, 7, 3);
-WorleyF got  = nzWorley21f(sp, J, 7);
-WorleyF r1   = nzWorley21fr(sp, J, 7, 1);
+NzWorleyF wide = nzWorley21fr(sp, J, 7, 3);
+NzWorleyF got  = nzWorley21f(sp, J, 7);
+NzWorleyF r1   = nzWorley21fr(sp, J, 7, 1);
 ok = vec3(
     step(abs(got.f1 - wide.f1) + abs(got.f2 - wide.f2), 1e-6),
     step(abs(r1.f1 - wide.f1), 1e-6),

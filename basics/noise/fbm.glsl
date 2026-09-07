@@ -10,10 +10,10 @@
 // this, the lattices of successive octaves stay axis-aligned and stack into a
 // visible plaid — the single most common tell of amateur fbm.
 
-const float FBM_ROT = 0.7853981; // ~pi/4, coprime enough with the lattice
+const float NZ_FBM_ROT = 0.7853981; // ~pi/4, coprime enough with the lattice
 
 float nzFbm21(vec2 p, int octaves, float lacunarity, float gain) {
-    mat2 rot = rot2(FBM_ROT);
+    mat2 rot = rot2(NZ_FBM_ROT);
     float sum = 0.0;
     float amp = 1.0;
     float norm = 0.0;
@@ -31,7 +31,7 @@ float nzFbm21(vec2 p, int octaves) {
 }
 
 float nzFbm21s(vec2 p, int octaves, float lacunarity, float gain, int seed) {
-    mat2 rot = rot2(FBM_ROT);
+    mat2 rot = rot2(NZ_FBM_ROT);
     float sum = 0.0;
     float amp = 1.0;
     float norm = 0.0;
@@ -46,7 +46,7 @@ float nzFbm21s(vec2 p, int octaves, float lacunarity, float gain, int seed) {
 
 /** Ridged variant: sharp creases where the field crosses zero. */
 float nzRidged21(vec2 p, int octaves, float lacunarity, float gain) {
-    mat2 rot = rot2(FBM_ROT);
+    mat2 rot = rot2(NZ_FBM_ROT);
     float sum = 0.0;
     float amp = 1.0;
     float norm = 0.0;

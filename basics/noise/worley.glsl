@@ -53,7 +53,7 @@
 /** Largest jitter for which a 3x3 search is provably sufficient. */
 const float NZ_WORLEY_R1_JITTER = 0.6568542;
 
-struct WorleyF {
+struct NzWorleyF {
     float f1;
     float f2;
     /** Offset to the nearest feature point. Zero-length only at a feature point. */
@@ -72,12 +72,12 @@ struct WorleyF {
  * rather than trusted, because above 1 a point could leave its own cell and
  * every bound above would be void.
  */
-WorleyF nzWorley21fr(vec2 p, float jitter, int seed, int radius) {
+NzWorleyF nzWorley21fr(vec2 p, float jitter, int seed, int radius) {
     jitter = sat(jitter);
     vec2 cell = floor(p);
     vec2 f = p - cell;
 
-    WorleyF w;
+    NzWorleyF w;
     // Larger than any distance the search can return, so the first candidate
     // always wins; F2 stays here only if the ring somehow holds one point.
     w.f1 = 1e9;
@@ -106,7 +106,7 @@ WorleyF nzWorley21fr(vec2 p, float jitter, int seed, int radius) {
 }
 
 /** F1, F2 and the nearest cell, searching as widely as the jitter requires. */
-WorleyF nzWorley21f(vec2 p, float jitter, int seed) {
+NzWorleyF nzWorley21f(vec2 p, float jitter, int seed) {
     return nzWorley21fr(p, jitter, seed, jitter <= NZ_WORLEY_R1_JITTER ? 1 : 2);
 }
 
@@ -122,6 +122,6 @@ float nzWorley21(vec2 p, float jitter, int seed) {
  * on F1.
  */
 float nzWorleyEdge21(vec2 p, float jitter, int seed) {
-    WorleyF w = nzWorley21f(p, jitter, seed);
+    NzWorleyF w = nzWorley21f(p, jitter, seed);
     return w.f2 - w.f1;
 }

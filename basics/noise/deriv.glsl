@@ -2,7 +2,7 @@
 #include "core/math.glsl"
 #include "hash/hash.glsl"
 #include "noise/gradient.glsl"
-// For FBM_ROT: the derivative has to walk the octaves through the SAME rotation
+// For NZ_FBM_ROT: the derivative has to walk the octaves through the SAME rotation
 // the value does, so the constant has exactly one definition.
 #include "noise/fbm.glsl"
 
@@ -28,14 +28,6 @@
 // a sign, a transposed matrix, a missing lacunarity factor — and every one of
 // those still produces a plausible picture. `test/noise.test.ts` therefore
 // checks these against central differences on the real driver.
-
-/**
- * Value and gradient of quintic smoothstep. The interpolant's own derivative is
- * needed because the lattice values are themselves being blended by it.
- */
-vec2 quinticD(vec2 t) {
-    return 30.0 * t * t * (t * (t - 2.0) + 1.0);
-}
 
 /**
  * Gradient noise with its derivative. Same field as `nzGrad21`, to the bit —
@@ -122,7 +114,7 @@ vec3 nzGrad21ds(vec2 p, int seed) {
  * that curl the wrong way while still looking like streamlines.
  */
 vec3 nzFbm21ds(vec2 p, int octaves, float lacunarity, float gain, int seed) {
-    mat2 rot = rot2(FBM_ROT);
+    mat2 rot = rot2(NZ_FBM_ROT);
     mat2 m = mat2(1.0);            // (lacunarity * rot)^i, accumulated
     float sum = 0.0;
     vec2 dsum = vec2(0.0);
@@ -146,7 +138,7 @@ vec3 nzFbm21ds(vec2 p, int octaves, float lacunarity, float gain, int seed) {
  * evaluates — correct-looking, and wrong for anyone who mixes the two.
  */
 vec3 nzFbm21d(vec2 p, int octaves, float lacunarity, float gain) {
-    mat2 rot = rot2(FBM_ROT);
+    mat2 rot = rot2(NZ_FBM_ROT);
     mat2 m = mat2(1.0);
     float sum = 0.0;
     vec2 dsum = vec2(0.0);
