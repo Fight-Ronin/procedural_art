@@ -1,0 +1,119 @@
+{
+  "id": "011",
+  "slug": "mycelium",
+  "title": "Mycelium",
+  "display": {
+    "exposure": 0,
+    "tonemap": "none"
+  },
+  "date": "2026-09-07",
+  "tags": [
+    "points",
+    "scatter",
+    "agents",
+    "physarum",
+    "stateful"
+  ],
+  "passes": [
+    {
+      "id": "agents",
+      "shader": "buffer-agents.frag",
+      "size": 320,
+      "substeps": 1
+    },
+    {
+      "id": "deposit",
+      "shader": "points-deposit.vert",
+      "size": 640,
+      "count": 102400
+    },
+    {
+      "id": "trail",
+      "shader": "buffer-trail.frag",
+      "size": 640
+    }
+  ],
+  "poster": {
+    "frame": 260,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 24,
+    "fps": 60
+  },
+  "still": {
+    "width": 3200,
+    "height": 3200,
+    "spp": 8
+  },
+  "thumb": {
+    "draws": 2,
+    "spp": 2
+  },
+  "presets": [
+    {
+      "name": "fine",
+      "values": {
+        "uWhite": 3.5,
+        "uGain": 10,
+        "uGamma": 0.8,
+        "uBack": "#0b0e14",
+        "uLow": "#1f5f6e",
+        "uMid": "#7fd4c1",
+        "uHot": "#fff3d0",
+        "uPhase": 0.45,
+        "uSharp": 0.55,
+        "uVignette": 0.35,
+        "uSenseAngle": 0.62,
+        "uSenseDist": 6,
+        "uTurn": 0.85,
+        "uSpeed": 0.9,
+        "uJitter": 0.045,
+        "uDrop": 0.3,
+        "uHue": 0.35,
+        "uDecay": 0.93,
+        "uDiffuse": 0.55,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    },
+    {
+      "name": "ember",
+      "values": {
+        "uWhite": 6.5,
+        "uGain": 10,
+        "uGamma": 0.8,
+        "uBack": "#100a08",
+        "uLow": "#6e3a1f",
+        "uMid": "#e0a05a",
+        "uHot": "#fff0d8",
+        "uPhase": 0.45,
+        "uSharp": 0.55,
+        "uVignette": 0.35,
+        "uSenseAngle": 0.62,
+        "uSenseDist": 18,
+        "uTurn": 0.85,
+        "uSpeed": 1.35,
+        "uJitter": 0.045,
+        "uDrop": 0.3,
+        "uHue": 0.35,
+        "uDecay": 0.93,
+        "uDiffuse": 0.55,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    }
+  ],
+  "notes": "Jones' slime-mould model. The piece the point pass was built for, and the first one whose vertex shader reads a simulation buffer: agents sense, turn and move in one buffer pass, deposit through the scatter pass, and the trail decays and diffuses in another. Four passes, no special cases.",
+  "ref": {
+    "size": 96,
+    "draws": 2,
+    "spp": 2,
+    "frame": 40,
+    "seed": 0
+  }
+}
