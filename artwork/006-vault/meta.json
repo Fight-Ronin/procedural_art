@@ -6,8 +6,8 @@
     "exposure": 0.05,
     "tonemap": "aces",
     "bloom": {
-      "strength": 0.3,
-      "threshold": 0.35,
+      "strength": 0.8,
+      "threshold": 0.1,
       "size": 256,
       "iterations": 5
     }
@@ -33,8 +33,69 @@
     "height": 4500,
     "spp": 24
   },
-  "presets": [],
-  "notes": "Built from the parts of basics/ no piece had touched: polar repetition, boolean subtraction, material-carrying smooth union, hex prisms, cosine palettes. Adds single scattering along the view ray for light shafts \u2014 a per-pixel integral, so tiled export stays byte-identical where a post-process bloom would not. Scene SDF kept cheap so the volumetric can afford steps, the opposite trade from 005.",
+  "presets": [
+    {
+      "name": "shaft",
+      "values": {
+        "uColumns": 11,
+        "uRadius": 2.05,
+        "uThick": 0.2,
+        "uAperture": 0.22,
+        "uSpin": 0.045,
+        "uDist": 3.2,
+        "uEyeY": -0.85,
+        "uLookY": 0.8,
+        "uFov": 1.45,
+        "uShafts": 12,
+        "uShaftSteps": 28,
+        "uHaze": 1.2,
+        "uPalShift": 0.08,
+        "uPalWidth": 0.32,
+        "uLight": "#ffd9a0",
+        "uFill": "#4d6f96",
+        "uFillPower": 0.22,
+        "uPower": 20,
+        "uRough": 0.48,
+        "uMetal": 0.25,
+        "uVignette": 0.62,
+        "uDisplayExposure": 0.05,
+        "uBloomStrength": 0.8,
+        "uBloomThreshold": 0.1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "slot",
+      "values": {
+        "uColumns": 22,
+        "uRadius": 2.05,
+        "uThick": 0.2,
+        "uAperture": 0.22,
+        "uSpin": 0.045,
+        "uDist": 3.2,
+        "uEyeY": -0.85,
+        "uLookY": 0.8,
+        "uFov": 0.85,
+        "uShafts": 15,
+        "uShaftSteps": 28,
+        "uHaze": 1.2,
+        "uPalShift": 0.08,
+        "uPalWidth": 0.32,
+        "uLight": "#ffd9a0",
+        "uFill": "#4d6f96",
+        "uFillPower": 0.14,
+        "uPower": 20,
+        "uRough": 0.48,
+        "uMetal": 0.25,
+        "uVignette": 0.62,
+        "uDisplayExposure": 0.05,
+        "uBloomStrength": 0.8,
+        "uBloomThreshold": 0.1,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
+  "notes": "A rotunda of repeated columns, lit through an aperture overhead, seen from across the room so the light arrives as a shaft rather than as a disc.\n\nWas the weakest piece in the gallery for two blocks, and the diagnosis came from measurement rather than from looking. tools/audit.ts perturbs every parameter of every piece and reports how far the picture moves; 006 came back with its entire subject at the BOTTOM of the list — uShafts 1.20, uHaze 2.79, uColumns 1.32, uRadius 2.34, uThick 1.93, uRough 0.05. What was left at the top was exposure, aperture, light colour and camera, which is the definition of a photograph of a lamp.\n\nThe cause was the viewpoint, not the lighting: the camera sat under the aperture looking up, i.e. straight down the axis of the shafts, and a beam seen end-on is a disc. Backing out to the far side of the rotunda and looking ACROSS the shaft turned uColumns and uHaze from doing nothing into the main levers.\n\nTwo constants then turned out to have been calibrated against the camera position that no longer existed. The scattering coefficient assumed 1/dist^2 near its clamp, so uShafts was already at 3.6 of a declared maximum of 4 and could not go further (range now 16). And the bloom threshold 0.35 sat above what the new framing produces, so bloom measured 0.42 against a bound of 1.0 — the same shape as 005's depth floor, in a third place. Both were set from the range the piece actually traverses.\n\nThe ambient was uLight dimmed, which makes every surface a tint of one hue; it is now a separate cool fill, which is what lets the warm shaft read as warm.",
   "ref": {
     "size": 110,
     "draws": 2,

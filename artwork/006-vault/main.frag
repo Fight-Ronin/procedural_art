@@ -1,6 +1,7 @@
 // 006 — Vault
 //
-// A rotunda of repeated columns, lit through an aperture overhead.
+// A rotunda of repeated columns, lit through an aperture overhead, seen from
+// across the room so the light arrives as a shaft rather than as a disc.
 //
 // Deliberately built from the parts of basics/ that no piece had touched:
 // opPolarRepeat, opRepeatLimited, opSubtract, opSmoothUnionM, sdCylinder,
@@ -18,6 +19,27 @@
 // The scene SDF is kept CHEAP on purpose — pure primitives, no noise. 005 spends
 // its budget on a displaced field and can afford no volumetrics; this one spends
 // it the other way round. Both march; they are not the same kind of expensive.
+//
+// THE CAMERA USED TO POINT DOWN THE SHAFT, and that is why this piece was the
+// weakest thing in the gallery for two blocks. It sat almost directly under the
+// aperture looking up (uDist 1.35, uLookY 1.70), which put the lamp in the
+// middle of the frame and the colonnade off the edge of it — and a beam of
+// light viewed END-ON is not a beam, it is a disc. The picture was a glowing
+// blob in the dark, and every previous attempt to fix it adjusted the lighting.
+//
+// `tools/audit.ts` is what named it, without looking at anything. It perturbs
+// every parameter of every piece and reports how much the picture moves, and
+// 006 came back with its whole subject at the bottom of the list: uShafts 1.20,
+// uHaze 2.79, uColumns 1.32, uRadius 2.34, uThick 1.93, uRough 0.05. Six knobs
+// naming the architecture and the volumetrics, none of them reaching the image.
+// What was left at the top was exposure, aperture, light colour and camera —
+// which is precisely a description of a photograph of a lamp.
+//
+// The fix is a viewpoint, not a light: back out to the far edge of the rotunda
+// and look ACROSS the shaft rather than up it. Everything else followed from
+// having done that — uColumns and uHaze went from doing nothing to doing the
+// work, and the scattering coefficient turned out to have been calibrated at a
+// camera position that no longer exists (see the note at the integral).
 
 // The display transform — exposure, tonemap, sRGB encode, dither — belongs to
 // viz's resolve pass and is declared in meta.json. mainImage returns LINEAR
@@ -37,29 +59,46 @@
 uniform float uColumns;   // @param 5.0 .. 24.0 = 11.0 "columns"
 uniform float uRadius;    // @param 1.2 .. 3.5 = 2.05 "ring radius"
 uniform float uThick;     // @param 0.06 .. 0.5 = 0.20 "column thickness"
-uniform float uAperture;  // @param 0.15 .. 1.6 = 1.00 "aperture"
+uniform float uAperture;  // @param 0.15 .. 1.6 = 0.22 "aperture"
 uniform float uSpin;      // @param 0.0 .. 0.3 = 0.045 "turn speed"
 // The camera lives INSIDE the dome. The dome is a sphere of radius 3.5 centred
 // at y = -1.3, and everything outside it is solid, so an eye placed beyond that
 // is embedded in the ceiling and sees the inside of the stone. Ask for less
 // than about 3.2 here.
-uniform float uDist;      // @param 0.4 .. 3.2 = 1.35 "camera distance"
-uniform float uEyeY;      // @param -1.2 .. 1.2 = -0.60 "camera height"
-uniform float uLookY;     // @param -1.0 .. 2.5 = 1.00 "look height"
-uniform float uFov;       // @param 0.5 .. 1.6 = 1.15 "field of view"
+uniform float uDist;      // @param 0.4 .. 3.6 = 3.20 "camera distance"
+uniform float uEyeY;      // @param -1.2 .. 1.2 = -0.85 "camera height"
+uniform float uLookY;     // @param -1.0 .. 2.5 = 0.80 "look height"
+uniform float uFov;       // @param 0.5 .. 1.6 = 1.45 "field of view"
 
-uniform float uShafts;    // @param 0.0 .. 4.0 = 3.00 "light shafts"
+uniform float uShafts;    // @param 0.0 .. 16.0 = 12.0 "light shafts"
+// Sample count for the scattering integral, and the one knob here that is
+// SUPPOSED to measure as doing nothing. `tools/audit.ts` reports it at 0.04 —
+// the smallest number in the gallery — because the samples are jittered, so
+// more of them reduce variance without moving the mean. A near-zero reading
+// here is evidence the integrator has converged, not evidence of a dead knob,
+// and it is worth saying so next to the declaration: the audit ranks, it does
+// not judge.
 uniform int   uShaftSteps;// @param 8 .. 48 = 28 step 1 "shaft samples"
-uniform float uHaze;      // @param 0.0 .. 1.5 = 0.90 "air density"
+uniform float uHaze;      // @param 0.0 .. 1.5 = 1.20 "air density"
 
 uniform float uPalShift;  // @param 0.0 .. 1.0 = 0.08 "palette shift"
 uniform float uPalWidth;  // @param 0.0 .. 1.0 = 0.32 "palette spread"
 uniform vec3  uLight;     // @color = #ffd9a0 "light"
-uniform float uPower;     // @param 0.0 .. 40.0 = 16.0 "light power"
+// The fill, and it is a SEPARATE COLOUR from the key on purpose.
+//
+// It used to be `uLight * 0.05` — the lamp's own colour, dimmed. That makes
+// every surface in the room a tint of one hue, and the picture comes out as a
+// single amber wash whatever the palette parameters say. A room lit by one warm
+// source still has a cool component, because the sky reaches it or because the
+// walls do not; giving the fill its own colour is what puts two hues in the
+// frame and lets the warm one read AS warm.
+uniform vec3  uFill;      // @color = #4d6f96 "fill"
+uniform float uFillPower; // @param 0.0 .. 0.8 = 0.22 "fill strength"
+uniform float uPower;     // @param 0.0 .. 40.0 = 20.0 "light power"
 
 uniform float uRough;     // @param 0.05 .. 1.0 = 0.48 "stone roughness"
 uniform float uMetal;     // @param 0.0 .. 1.0 = 0.25 "ring metal"
-uniform float uVignette;  // @param 0.0 .. 1.0 = 0.5 "vignette"
+uniform float uVignette;  // @param 0.0 .. 1.0 = 0.62 "vignette"
 
 /** Material id carried out of the scene: 0 stone, 1 the metal ring. */
 float gMaterial;
@@ -159,7 +198,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         // Inverse square, because the light is a lamp in a room rather than a sun.
         vec3 radiance = uLight * uPower * sh / max(dist * dist, 0.25);
         col = shDirect(mat, n, v, l, radiance);
-        col += shAmbient(mat, n, v, uLight * 0.05 * ao, uLight * 0.04 * ao);
+        col += shAmbient(mat, n, v, uFill * uFillPower * ao, uFill * uFillPower * 0.8 * ao);
     }
 
     // --- single scattering: the shafts --------------------------------------
@@ -192,6 +231,18 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         // samples over fourteen units, each divided by a squared distance that
         // is often well under one, adds up fast. The first version used 0.08
         // and returned a white frame.
+        //
+        // THAT CALIBRATION WAS MADE FROM UNDER THE LAMP. `1 / dist^2` was near
+        // its clamp for most of the ray, so 0.010 was as much scattering as the
+        // frame could take. Seen from across the rotunda the same integral is
+        // an order of magnitude smaller, and the coefficient that had been
+        // "correct" was quietly the reason the shafts would not appear at any
+        // setting — uShafts was already at 3.6 of a declared maximum of 4.
+        // The range now runs to 16 rather than 4, and the default sits at 12.
+        //
+        // A constant tuned against a configuration, kept after the
+        // configuration changed. The same shape as 005's depth-ramp floor and
+        // 011's density white point, in a third place.
         col += scatter * uShafts * uPower * 0.010;
     }
 
