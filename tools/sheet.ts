@@ -3,8 +3,14 @@
  *
  *   npm run sheet -- 007 uScale=6,9,12
  *   npm run sheet -- 007 uScale=6,9,12 uEmpty=0.1,0.25,0.4 --size 320
+ *   npm run sheet -- 001 frame=0,240,480,720 uFlow=0.1,0.25,0.4
  *
  * The first parameter varies across columns, the second down rows.
+ *
+ * `frame` is accepted as an axis name alongside the real parameters. Time is a
+ * parameter of the image in exactly the way the others are — `--frame` already
+ * existed as a single value — and any question about MOTION needs a row of
+ * frames to answer, which is otherwise four runs and a paste-up. 001 forced it.
  *
  * This exists because of a lesson the repo already learned and then did not
  * keep: 004's flow smearing was argued about for three rounds of theory and
@@ -80,18 +86,22 @@ try {
 
   for (let r = 0; r < rows.length; r++) {
     for (let c = 0; c < cols.length; c++) {
-      await session.page.evaluate(
-        (p: { n: string; v: number }) => window.__pa.setParam(p.n, p.v),
-        { n: axes[0].name, v: cols[c] },
-      );
-      if (axes[1]) {
-        await session.page.evaluate(
-          (p: { n: string; v: number }) => window.__pa.setParam(p.n, p.v),
-          { n: axes[1].name, v: rows[r] },
-        );
+      // `frame` is not a shader parameter, so it is applied to the render call
+      // rather than through setParam — which would silently do nothing, since
+      // ParamStore drops names it does not know.
+      let frame = FRAME;
+      for (const [axis, v] of [[axes[0], cols[c]], [axes[1], rows[r]]] as const) {
+        if (!axis) continue;
+        if (axis.name === 'frame') frame = v;
+        else {
+          await session.page.evaluate(
+            (p: { n: string; v: number }) => window.__pa.setParam(p.n, p.v),
+            { n: axis.name, v },
+          );
+        }
       }
       const img: Image = await renderStill(session.page, {
-        width: cellW, height: cellH, tile: 1024, draws: 1, spp: SPP, frame: FRAME,
+        width: cellW, height: cellH, tile: 1024, draws: 1, spp: SPP, frame,
       });
       const x0 = c * (cellW + GUTTER);
       const y0 = r * (cellH + GUTTER);

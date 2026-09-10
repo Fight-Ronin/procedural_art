@@ -3,7 +3,7 @@
   "slug": "plate",
   "title": "Plate",
   "display": {
-    "exposure": 0.0,
+    "exposure": 0,
     "tonemap": "none"
   },
   "date": "2026-09-06",
@@ -25,8 +25,59 @@
     "height": 4000,
     "spp": 16
   },
-  "presets": [],
-  "notes": "The piece that forced basics/sdf/prim2d. Hard-edged geometry: a quadtree whose depth comes from a low-frequency field, each leaf carrying a stroked 2D SDF mark. Reads no screen-space derivative \u2014 an exact distance means the pixel footprint of the field is pxSize() times the world scale, known analytically. Reads no uQuality either: gating would move the cell boundaries, so the preview would be a different drawing from the print.",
+  "presets": [
+    {
+      "name": "blueprint",
+      "values": {
+        "uScale": 9,
+        "uDepth": 3,
+        "uSplit": 0.42,
+        "uSplitStep": 0.11,
+        "uFieldFreq": 0.28,
+        "uStroke": 0.036,
+        "uUniform": 0.55,
+        "uEmpty": 0.22,
+        "uAccent": 0.45,
+        "uMargin": 0.045,
+        "uGrain": 0.08,
+        "uDrift": 0.05,
+        "uPaper": "#12202e",
+        "uInkCol": "#cfe2f0",
+        "uHot": "#f0a23c",
+        "uCool": "#6fd0c8",
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    },
+    {
+      "name": "dense",
+      "values": {
+        "uScale": 11,
+        "uDepth": 4,
+        "uSplit": 0.26,
+        "uSplitStep": 0.06,
+        "uFieldFreq": 0.28,
+        "uStroke": 0.024,
+        "uUniform": 0.55,
+        "uEmpty": 0.08,
+        "uAccent": 0.38,
+        "uMargin": 0.045,
+        "uGrain": 0.16,
+        "uDrift": 0.05,
+        "uPaper": "#ece5d8",
+        "uInkCol": "#171a21",
+        "uHot": "#c2452d",
+        "uCool": "#2f6b7c",
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    }
+  ],
+  "notes": "The piece that forced basics/sdf/prim2d. Hard-edged geometry: a quadtree whose depth comes from a low-frequency field, each leaf carrying a stroked 2D SDF mark. Reads no screen-space derivative — an exact distance means the pixel footprint of the field is pxSize() times the world scale, known analytically. Reads no uQuality either: gating would move the cell boundaries, so the preview would be a different drawing from the print.",
   "ref": {
     "size": 176,
     "draws": 2,

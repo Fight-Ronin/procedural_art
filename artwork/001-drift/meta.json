@@ -13,7 +13,7 @@
     "field"
   ],
   "poster": {
-    "frame": 0,
+    "frame": 240,
     "seed": 0
   },
   "video": {
@@ -25,13 +25,86 @@
     "height": 5000,
     "spp": 16
   },
-  "presets": [],
-  "notes": "First piece. Exists to prove the chain: include resolver -> source map -> preamble -> declared parameters -> supersampled render -> single sRGB encode.",
+  "presets": [
+    {
+      "name": "smelt",
+      "values": {
+        "uScale": 0.9,
+        "uWarp": 4.2,
+        "uOct": 5,
+        "uDrift": 0.01,
+        "uFlow": 0.26,
+        "uFlowRate": 0.06,
+        "uBlend": 0.3,
+        "uInk": "#180a06",
+        "uMid": "#96341c",
+        "uHot": "#ffd27a",
+        "uContours": false,
+        "uBands": 14,
+        "uInkWidth": 0.12,
+        "uInkWeight": 0.75,
+        "uVignette": 0.62,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "veil",
+      "values": {
+        "uScale": 0.85,
+        "uWarp": 1.7,
+        "uOct": 3,
+        "uDrift": 0.01,
+        "uFlow": 0.26,
+        "uFlowRate": 0.06,
+        "uBlend": 0.86,
+        "uInk": "#0b1020",
+        "uMid": "#4a3f78",
+        "uHot": "#f0dcc0",
+        "uContours": false,
+        "uBands": 14,
+        "uInkWidth": 0.12,
+        "uInkWeight": 0.75,
+        "uVignette": 0.5,
+        "uDisplayExposure": -0.6,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "still",
+      "values": {
+        "uScale": 1.25,
+        "uWarp": 2.6,
+        "uOct": 4,
+        "uDrift": 0,
+        "uFlow": 0,
+        "uFlowRate": 0.06,
+        "uBlend": 0.55,
+        "uInk": "#0a0f1c",
+        "uMid": "#4f3375",
+        "uHot": "#fdcc78",
+        "uContours": true,
+        "uBands": 14,
+        "uInkWidth": 0.12,
+        "uInkWeight": 0.75,
+        "uVignette": 0.55,
+        "uDisplayExposure": 0.55,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
+  "notes": "First piece. Exists to prove the chain: include resolver -> source map -> preamble -> declared parameters -> supersampled render -> single sRGB encode. The flow offsets are zero at frame 0, so poster and ref deliberately do not sit there: a frame where a parameter cannot act measures it as dead.",
   "ref": {
     "size": 192,
     "draws": 2,
     "spp": 2,
-    "frame": 0,
+    "frame": 240,
     "seed": 0
   }
 }

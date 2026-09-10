@@ -105,15 +105,39 @@ export function resolvePreset(meta: PresetMeta, name: string, where: string): Pr
  *     an enum that no longer has that option. The preset is then not
  *     reproducible, whatever the picture looks like.
  *
- * Both are stated with the parameter names, because the fix is always either to
- * re-capture the preset or to put the range back, and which one depends on
- * which parameters moved.
+ *   unspecified — the piece declares a parameter the preset does not name. This
+ *     is the OPPOSITE direction from `unknown` and it was missed for a long
+ *     time, because it produces no error anywhere: the parameter simply keeps
+ *     whatever value it already had, which is the shader's default.
+ *
+ * Both of the first two are stated with the parameter names, because the fix is
+ * always either to re-capture the preset or to put the range back, and which one
+ * depends on which parameters moved.
+ *
+ * THE THIRD ONE IS WHY THIS PARAGRAPH EXISTS. Adding a parameter to a piece
+ * silently redefines every preset it already has, and the damage is not that the
+ * new parameter is missing — it is that the preset now means something
+ * different. 010 is the case that found it: adding a flow drift, defaulted on,
+ * turned two presets that captured `uDecay = 1` from "accumulate this one map
+ * forever" into "accumulate every map the drift passes through", which is a
+ * smear. Nothing would have reported that; the presets would simply have
+ * started rendering a different, worse picture.
+ *
+ * Measured before it was made fatal: every preset in the gallery named every
+ * parameter its piece declared, except the two that had just been invalidated.
+ * So the refusal costs nothing today and catches exactly this drift, and
+ * `tools/capture.ts` makes recapturing one command.
  */
 export async function applyPreset(page: Page, preset: Preset, where: string): Promise<void> {
   const miss = await page.evaluate(
     (values: Record<string, unknown>) => window.__pa.loadValues(values),
     preset.values,
   );
+
+  const declared = await page.evaluate(
+    () => window.__pa.store.specs.map((s: { name: string }) => s.name),
+  ) as string[];
+  const unspecified = declared.filter((n) => !(n in preset.values));
 
   const problems: string[] = [];
   if (miss.unknown.length) {
@@ -122,11 +146,16 @@ export async function applyPreset(page: Page, preset: Preset, where: string): Pr
   if (miss.changed.length) {
     problems.push(`  values that did not survive the parameter's range: ${miss.changed.join(', ')}`);
   }
+  if (unspecified.length) {
+    problems.push(
+      `  parameters the piece declares that this preset does not name: ${unspecified.join(', ')}\n` +
+      '    (they fall back to the shader defaults, so the preset no longer pins one picture)');
+  }
   if (problems.length) {
     throw new Error(
       `${where}: preset ${JSON.stringify(preset.name)} does not fit this piece\n` +
         `${problems.join('\n')}\n` +
-        '  the preset is stale — re-capture it in the viewer, or restore the ranges it was captured against',
+        `  the preset is stale — re-capture it:  npx tsx tools/capture.ts <id> ${preset.name}`,
     );
   }
 }

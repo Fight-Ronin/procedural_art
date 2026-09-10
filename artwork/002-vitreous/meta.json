@@ -26,7 +26,66 @@
     "height": 4000,
     "spp": 64
   },
-  "presets": [],
+  "presets": [
+    {
+      "name": "amber",
+      "values": {
+        "uMajor": 0.95,
+        "uMinor": 0.26,
+        "uSpread": 0.42,
+        "uTwist": 0.6,
+        "uWeld": 0.22,
+        "uIor": 1.62,
+        "uDisperse": 0.026,
+        "uTint": "#e0a253",
+        "uDensity": 1.4,
+        "uBounces": 4,
+        "uEnvMode": 1,
+        "uSkyUp": "#f2e2c2",
+        "uSkyDown": "#241708",
+        "uSunYaw": 0.9,
+        "uSunPitch": 0.65,
+        "uSunPower": 18,
+        "uFov": 0.72,
+        "uDist": 4.1,
+        "uSpin": 0.05,
+        "uPitch": 0.32,
+        "uDisplayExposure": 0.4,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "obsidian",
+      "values": {
+        "uMajor": 0.95,
+        "uMinor": 0.26,
+        "uSpread": 0.42,
+        "uTwist": 0.6,
+        "uWeld": 0.22,
+        "uIor": 1.95,
+        "uDisperse": 0.02,
+        "uTint": "#2a3038",
+        "uDensity": 4.5,
+        "uBounces": 3,
+        "uEnvMode": 2,
+        "uSkyUp": "#b9c6d8",
+        "uSkyDown": "#05060a",
+        "uSunYaw": 0.9,
+        "uSunPitch": 0.65,
+        "uSunPower": 24,
+        "uFov": 0.72,
+        "uDist": 4.1,
+        "uSpin": 0.05,
+        "uPitch": 0.32,
+        "uDisplayExposure": 0.4,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
   "notes": "Forced basics/sdf, basics/raymarch, basics/optics and basics/env into existence. Spectral dispersion rides on viz's supersampling loop via paRand(), so spp buys antialiasing and rainbow smoothness at the same time.",
   "ref": {
     "size": 112,

@@ -26,7 +26,62 @@
     "height": 5000,
     "spp": 16
   },
-  "presets": [],
+  "presets": [
+    {
+      "name": "fine",
+      "values": {
+        "uFlowScale": 1.15,
+        "uFlowAmp": 0.85,
+        "uFlowOct": 3,
+        "uDrift": 0.035,
+        "uCellScale": 100,
+        "uJitter": 0.62,
+        "uWall": 0.85,
+        "uSteps": 40,
+        "uStride": 0.018,
+        "uTaper": 0.55,
+        "uGrain": 2.4,
+        "uBand": 0.34,
+        "uLoad": 0.72,
+        "uDeep": "#10131c",
+        "uSilt": "#7d6a52",
+        "uPale": "#e8dcc4",
+        "uSpread": 1.35,
+        "uVignette": 0.42,
+        "uDisplayExposure": 0.25,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "eddy",
+      "values": {
+        "uFlowScale": 0.5,
+        "uFlowAmp": 1.5,
+        "uFlowOct": 3,
+        "uDrift": 0.035,
+        "uCellScale": 30,
+        "uJitter": 0.62,
+        "uWall": 0.85,
+        "uSteps": 18,
+        "uStride": 0.038,
+        "uTaper": 0.55,
+        "uGrain": 1.7,
+        "uBand": 0.75,
+        "uLoad": 0.72,
+        "uDeep": "#10131c",
+        "uSilt": "#7d6a52",
+        "uPale": "#e8dcc4",
+        "uSpread": 1.35,
+        "uVignette": 0.42,
+        "uDisplayExposure": 0.25,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
   "notes": "A cellular field smeared along the streamlines of a divergence-free curl-noise flow. Forced analytic noise derivatives, curl noise, Worley and the flow integrator into basics. Stateless on purpose: per-pixel streamline integration keeps print detail unbounded, unlike advecting a dye field through a fixed grid.",
   "ref": {
     "size": 144,

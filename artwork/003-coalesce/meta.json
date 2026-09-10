@@ -34,8 +34,65 @@
     "height": 4000,
     "spp": 8
   },
-  "presets": [],
-  "notes": "First stateful piece. Forced the pass chain: float ping-pong targets at their own resolution, substeps, an init step, and self-reading feedback. Simulation at half display resolution with detail recovered in the image pass \u2014 the print strategy for stateful work.",
+  "presets": [
+    {
+      "name": "labyrinth",
+      "values": {
+        "uContrast": 2.4,
+        "uBias": -0.06,
+        "uRelief": 1.15,
+        "uLightYaw": -0.9,
+        "uSheen": 0.7,
+        "uInk": "#10131c",
+        "uMid": "#3c6b7a",
+        "uHot": "#f2e6c8",
+        "uGrain": 0.22,
+        "uGrainScale": 64,
+        "uVignette": 0.4,
+        "uFeed": 0.03,
+        "uKill": 0.058,
+        "uGradient": 0.12,
+        "uDiffA": 1,
+        "uDiffB": 0.48,
+        "uDt": 1,
+        "uSeedN": 16,
+        "uSeedSize": 0.022,
+        "uDisplayExposure": 0.15,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "rings",
+      "values": {
+        "uContrast": 2.4,
+        "uBias": -0.06,
+        "uRelief": 1.15,
+        "uLightYaw": -0.9,
+        "uSheen": 0.7,
+        "uInk": "#10131c",
+        "uMid": "#3c6b7a",
+        "uHot": "#f2e6c8",
+        "uGrain": 0.22,
+        "uGrainScale": 64,
+        "uVignette": 0.4,
+        "uFeed": 0.058,
+        "uKill": 0.0615,
+        "uGradient": 0.12,
+        "uDiffA": 1,
+        "uDiffB": 0.48,
+        "uDt": 1,
+        "uSeedN": 16,
+        "uSeedSize": 0.022,
+        "uDisplayExposure": 0.15,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
+  "notes": "First stateful piece. Forced the pass chain: float ping-pong targets at their own resolution, substeps, an init step, and self-reading feedback. Simulation at half display resolution with detail recovered in the image pass — the print strategy for stateful work.",
   "ref": {
     "size": 160,
     "draws": 2,

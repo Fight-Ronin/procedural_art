@@ -15,7 +15,8 @@
     "video": "node --experimental-strip-types tools/video.ts",
     "thumbs": "node --experimental-strip-types tools/thumbs.ts",
     "ladder": "node --experimental-strip-types tools/ladder.ts",
-    "sheet": "node --experimental-strip-types tools/sheet.ts"
+    "sheet": "node --experimental-strip-types tools/sheet.ts",
+    "motion": "node --experimental-strip-types tools/motion.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

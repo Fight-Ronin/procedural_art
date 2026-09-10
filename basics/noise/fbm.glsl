@@ -60,13 +60,32 @@ float nzRidged21(vec2 p, int octaves, float lacunarity, float gain) {
 }
 
 /**
- * Domain warping (IQ). Displace the sample point by another fbm field, twice.
- * Returns the final value; `q` and `r` come back so the artwork can colour by
- * the intermediate displacement fields, which is where the good structure is.
+ * Domain warping (IQ), with each stage's lattice free to move on its own.
+ *
+ * `ow` displaces the first warp field, `ov` the second, `os` the field being
+ * sampled through them. Zero for all three is plain domain warping.
+ *
+ * WHY THE THREE OFFSETS ARE SEPARATE. Give all three the SAME offset c and the
+ * result is exactly the un-offset warp evaluated at p + c: every stage sees its
+ * own argument shifted by c, so the composite is a function of p only through
+ * p + c. That is a rigid translation of the whole picture and nothing else —
+ * which is why animating a single offset pans a warped field rather than making
+ * it flow, however the offset moves. Different offsets are not a translation of
+ * anything: the stages slide past one another and the composite deforms in
+ * place, features stretching, splitting and re-forming without going anywhere.
+ * 001 measured this both ways; the note is in claude/001-flowing.md.
+ *
+ * `q` and `r` come back so the artwork can colour by the intermediate
+ * displacement fields, which is where the good structure is.
  */
+float nzWarp21(vec2 p, int octaves, float amount, vec2 ow, vec2 ov, vec2 os,
+               out vec2 q, out vec2 r) {
+    q = vec2(nzFbm21(p + ow, octaves), nzFbm21(p + ow + vec2(5.2, 1.3), octaves));
+    r = vec2(nzFbm21(p + amount * q + ov + vec2(1.7, 9.2), octaves),
+             nzFbm21(p + amount * q + ov + vec2(8.3, 2.8), octaves));
+    return nzFbm21(p + amount * r + os, octaves);
+}
+
 float nzWarp21(vec2 p, int octaves, float amount, out vec2 q, out vec2 r) {
-    q = vec2(nzFbm21(p, octaves), nzFbm21(p + vec2(5.2, 1.3), octaves));
-    r = vec2(nzFbm21(p + amount * q + vec2(1.7, 9.2), octaves),
-             nzFbm21(p + amount * q + vec2(8.3, 2.8), octaves));
-    return nzFbm21(p + amount * r, octaves);
+    return nzWarp21(p, octaves, amount, vec2(0.0), vec2(0.0), vec2(0.0), q, r);
 }
