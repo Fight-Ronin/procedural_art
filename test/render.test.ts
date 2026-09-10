@@ -44,6 +44,23 @@ interface PieceCheck {
    */
   simFrame?: number;
   posterFrame: number;
+  /**
+   * The frame every check that only wants "the piece as it actually looks" runs
+   * at — is it blank, does a parameter reach the image. Derived, never written
+   * in the table.
+   *
+   * SEPARATE FROM `simFrame` because `simFrame` answers a different question.
+   * `simFrame` means "this piece has a simulation, examine it here", and the
+   * four stateful checks are guarded on it. Using the same field for "where to
+   * look at the picture" made the second meaning conditional on the first, so a
+   * STATELESS piece was always examined at frame 0 — with the comment "for the
+   * rest, frame 0 is the picture", which was true right up until a stateless
+   * piece had a parameter that only acts through time. 001 is now that piece:
+   * its flow offsets are zero at t = 0 by construction, so a check at frame 0
+   * would read a working knob as dead. Third time in this repo, and the second
+   * time inside the fix for the second time.
+   */
+  workFrame: number;
 }
 
 /**
@@ -73,9 +90,56 @@ const OVERRIDES: (Partial<PieceCheck> & { id: string })[] = [
     poster: 320, posterDraws: 2, posterSpp: 2, posterFrame: 0,
   },
   {
+    // Every pixel integrates a geodesic — up to 192 Runge-Kutta steps, four
+    // metric evaluations each, before one colour is looked up — which makes it
+    // the most expensive piece here, roughly five times 008 per sample.
+    //
+    // `small` IS 120 RATHER THAN 90, AND THE REASON IS THE PIECE'S ONE REAL
+    // RESOLUTION DEPENDENCE. Its sky is a field of point sources, and a point
+    // source seen through a bounded display transform cannot be
+    // resolution-stable: a pixel that half-covers a star of radiance 1.5
+    // averages to 0.75 and is compressed gently, while at three times the size
+    // the same star fills a pixel, is compressed hard, and its neighbours are
+    // black. Reducing those two back to a common grid does not give the same
+    // number, and no amount of sampling makes it — measured, by tripling spp
+    // from 2 to 6: the per-cell difference fell 1.43 -> 1.12 (that part IS
+    // Monte Carlo) while the overall LEVEL rose 0.59 -> 0.90, converging onto
+    // the bias rather than away from it. The same experiment 006 ran, with the
+    // same conclusion in the opposite direction.
+    //
+    // Isolated before it was fixed, rather than assumed: with uMode 1 (flat
+    // classification colours, no sky at all) the same comparison gives a level
+    // of 0.10. The geodesics and the fractal winding at the critical angle are
+    // not the problem; the sky was.
+    //
+    // So it is fixed at the source. The piece's light now comes from an
+    // EXTENDED field — a ridged-noise nebula on the celestial sphere — with the
+    // point sources demoted to dim punctuation, which puts the level at
+    // 0.14/255 against the hard limit of 1.0. That constraint improved the
+    // picture as well as the number: bending a high-frequency star field just
+    // makes more high frequency and reads as noise, while a SMOOTH field folded
+    // by the map generates the fine structure itself, and the accordion of
+    // rings at the critical angle becomes the same nebula seen a dozen times.
+    //
+    // What is still open is print. A star cannot be both small and hot until
+    // its angular size follows the pixel footprint THROUGH the lensing map —
+    // and that magnification is the same number that makes an Einstein ring
+    // bright, so it is one quantity buying both. Next block; until then, no
+    // bloom, because nothing here is hot enough to have any (008's lesson).
+    //
+    // Per-cell mean measured at 1.31, so the tolerance is the repo default of 3
+    // rather than something chosen for this piece.
+    id: '012',
+    small: 120, ratio: 3, spp: 3, compare: 30, tolerance: 3,
+    poster: 240, posterDraws: 1, posterSpp: 2, posterFrame: 0,
+  },
+  {
+    // posterFrame follows meta.json's poster.frame: 001's flow offsets are zero
+    // at t = 0, so a poster at frame 0 is the one picture the piece can make
+    // that does not show what it now does. Free here — nothing to step.
     id: '001',
     small: 300, ratio: 3, spp: 1, compare: 60, tolerance: 3,
-    poster: 900, posterDraws: 6, posterSpp: 4, posterFrame: 0,
+    poster: 900, posterDraws: 6, posterSpp: 4, posterFrame: 240,
   },
   {
     // Refractive raymarching on SwiftShader is slow; small numbers, and a
@@ -139,6 +203,16 @@ const OVERRIDES: (Partial<PieceCheck> & { id: string })[] = [
     poster: 300, posterDraws: 2, posterSpp: 2, posterFrame: 0,
   },
   {
+    // Stateful, and the slowest simulation in the repo: 320x320 agents each
+    // sensing three bilinear taps, plus a 3x3 blur over a 640x640 trail, every
+    // step. Small numbers everywhere, and a working frame far from zero because
+    // the network needs a couple of hundred steps to exist at all.
+    id: '011',
+    small: 120, ratio: 3, spp: 1, compare: 30, tolerance: 4,
+    poster: 420, posterDraws: 2, posterSpp: 2, posterFrame: 260,
+    simFrame: 150,
+  },
+  {
     // Stateful. The simulation grid is fixed at 384 texels on the short side,
     // so both resolutions in the comparison read the SAME field — which is the
     // whole point of sizing passes absolutely rather than as a fraction of the
@@ -160,9 +234,46 @@ const DEFAULTS = {
   poster: 700, posterDraws: 4, posterSpp: 3, posterFrame: 0,
 };
 
+/**
+ * The frame a stateful piece is examined at, DISCOVERED rather than registered.
+ *
+ * It used to come only from an explicit `simFrame` in the table above, so a
+ * stateful piece nobody added an entry for was silently examined at frame 0 —
+ * and 010 was exactly that piece. Two consequences, both invisible: the
+ * "simulation evolves" check never ran for it at all (it is guarded on
+ * `simFrame`), and the parameter check ran at a frame where the piece's
+ * accumulator holds a single deposit. That second one surfaced when 010 gained
+ * a `uDecay` declaration in its image pass, making retention the first float
+ * the check picks: at frame 0 there is no history to retain, so a working knob
+ * measured 0.00 and read exactly like a dead one.
+ *
+ * `poster.frame` is where a piece already declares when it is worth looking at,
+ * so it is the honest default. Capped, because this frame is paid on EVERY
+ * render the check makes and the poster frame can be 260 steps of a three-pass
+ * simulation; the frame only has to be late enough that the piece exists. An
+ * explicit entry still wins, which is how 003 and 011 keep their cheaper ones.
+ *
+ * THE CAP IS A COST CAP ON SIMULATION STEPS, so it applies to stateful pieces
+ * only. Seeking a stateless piece to frame 240 sets a uniform and costs nothing,
+ * and paying nothing for the frame the piece itself nominates is strictly better
+ * than paying nothing for frame 0.
+ */
+const SIM_FRAME_CAP = 60;
+
 const CHECKS: PieceCheck[] = pieceRefs().map((p) => {
   const over = OVERRIDES.find((o) => o.id === p.id) ?? { id: p.id };
-  return { ...DEFAULTS, dir: p.dir, ...over } as PieceCheck;
+  const meta = JSON.parse(
+    readFileSync(path.join(ROOT, p.dir, 'meta.json'), 'utf8'),
+  ) as { passes?: unknown[]; poster?: { frame?: number } };
+  const stateful = (meta.passes?.length ?? 0) > 0;
+  const poster = meta.poster?.frame ?? 0;
+  // Where to LOOK at the piece — every piece has an answer to that, stateful or
+  // not. An explicit simFrame still wins, since it was chosen to be cheap.
+  const workFrame = over.simFrame ?? (stateful ? Math.min(poster, SIM_FRAME_CAP) : poster);
+  // Whether there is a SIMULATION to examine — only stateful pieces have one,
+  // and the four stateful checks are guarded on this being set.
+  const simFrame = stateful ? workFrame || undefined : undefined;
+  return { ...DEFAULTS, dir: p.dir, ...over, simFrame, workFrame } as PieceCheck;
 });
 
 section('render');
@@ -264,9 +375,15 @@ for (const c of ACTIVE) {
       `max channel difference ${walk.max} (simulation left at step ${walk.at})`);
   }
 
+  // AT THE PIECE'S WORKING FRAME, like the parameter check below and for the
+  // same reason. "Is there a picture here" asked at frame 0 of a stateful piece
+  // is asking before the piece has one: 011's trail map is seeded empty, so
+  // frame 0 is a uniform dark field and the check reports a blank artwork that
+  // is working perfectly. 003 happened to pass only because a reaction-diffusion
+  // is seeded with noise, which has contrast by accident rather than by design.
   const stats = await h.page.evaluate(
-    ({ n, spp }: { n: number; spp: number }) => {
-      const px = window.__pa.renderAt(n, n, 0, spp);
+    ({ n, spp, f }: { n: number; spp: number; f: number }) => {
+      const px = window.__pa.renderAt(n, n, f, spp);
       let min = 255;
       let max = 0;
       for (let i = 0; i < px.length; i += 4) {
@@ -278,7 +395,7 @@ for (const c of ACTIVE) {
       }
       return { min, max, nan: px.some((v) => Number.isNaN(v)) };
     },
-    { n: c.small, spp: c.spp },
+    { n: c.small, spp: c.spp, f: c.workFrame },
   );
   check(`${c.id} frame is not blank`, stats.max - stats.min > 30, JSON.stringify(stats));
   check(`${c.id} has no NaN`, !stats.nan);
@@ -353,7 +470,7 @@ for (const c of ACTIVE) {
         count: window.__pa.store.specs.length,
       };
     },
-    { n: Math.min(c.small, 160), f: c.simFrame ?? 0 },
+    { n: Math.min(c.small, 160), f: c.workFrame },
   );
   check(`${c.id} declares parameters`, paramEffect.count >= 5, `${paramEffect.count} parameters`);
   check(`${c.id} a parameter changes the image`, paramEffect.delta > 0.5,
@@ -421,6 +538,24 @@ for (const c of ACTIVE) {
     presets: { name: string; values: Record<string, number> }[];
   };
   const saved = after.presets.find((p) => p.name === '__test__');
+
+  // THIS BLOCK USED TO ASSERT NOTHING. It posted the capture, read the file
+  // back, found the entry — and then fell straight into the next section
+  // without a single check(), so the whole endpoint was untested while looking
+  // tested. It also never restored the file, which is why 001's committed
+  // meta.json carried a preset named `__test__` for weeks: the suite's own
+  // debris, shipped in the repo, and indistinguishable at a glance from a look
+  // somebody meant to keep.
+  check('capturing a preset writes it into the piece meta.json',
+    json.ok && saved !== undefined, json.error ?? `presets: ${after.presets.map((p) => p.name).join(', ')}`);
+  check('and the captured values survive the round trip',
+    saved?.values.uWarp === 1.23, JSON.stringify(saved?.values ?? null));
+
+  // Restored unconditionally, byte for byte. A test that leaves a committed
+  // file modified makes every later `git status` lie about what changed.
+  writeFileSync(metaPath, before);
+  check('and the test leaves the piece meta.json exactly as it found it',
+    readFileSync(metaPath, 'utf8') === before);
   // --- bloom actually blooms -------------------------------------------------
   //
   // A piece that declares bloom must visibly differ with it turned off. Without
@@ -429,9 +564,12 @@ for (const c of ACTIVE) {
   // in the suite, because the reference images would simply be regenerated
   // around it.
   //
-  // Only 006 declares one. That is itself the finding: bloom needs radiance
-  // above 1, and a piece lit by an environment rather than by a visible source
-  // does not have any. 002 and 005 were tried and measured flat.
+  // Three pieces declare one — 006, 008 and 009 — and what they have in common
+  // is the finding: bloom needs radiance above 1, which means a source IN THE
+  // FRAME. A piece lit by an environment does not have any, and 002 and 005
+  // were both tried and measured flat. 006 demonstrated the converse the hard
+  // way: moving its lamp out of shot dropped its bloom delta from 15.97 to
+  // 0.24, because the lamp WAS the thing above the threshold.
   {
     const withBloom = pieceRefs().filter((p) => {
       const m = JSON.parse(readFileSync(path.join(ROOT, p.dir, 'meta.json'), 'utf8'));

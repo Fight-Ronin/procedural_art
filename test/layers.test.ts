@@ -123,14 +123,18 @@ const sources = new Map(glsl.map((f) => [f, code(readFileSync(f, 'utf8'))]));
 {
   const PREFIX: Record<string, string[]> = {
     aa: ['aa'],
+    agent: ['ag'],
+    attract: ['atr'],
     color: ['col'],
     core: [], // the unprefixed base: sat, remap, rot2, quintic
     env: ['env'],
     field: ['flow'],
     hash: ['hash'],
+    metric: ['mt'],
     noise: ['nz'],
     optics: ['opt'],
     raymarch: ['rm', 'sceneSdf'],
+    relativity: ['rel'],
     sample: ['smp'],
     sdf: ['sd', 'op'],
     shade: ['sh'],
