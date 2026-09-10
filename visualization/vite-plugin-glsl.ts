@@ -74,7 +74,7 @@ export function glslPlugin(opts: { root: string }): Plugin {
 
     transform(src, id) {
       const file = id.split('?')[0];
-      if (!file.endsWith('.frag')) return null;
+      if (!file.endsWith('.frag') && !file.endsWith('.vert')) return null;
 
       const read: ReadFile = (spec, fromFile) => {
         if (spec === USER_SPEC) return { file: rel(file), source: src };
@@ -93,10 +93,15 @@ export function glslPlugin(opts: { root: string }): Plugin {
         return null;
       };
 
-      // A pass's role is its filename: buffer-*.frag is a simulation step and
-      // gets the direct-write epilogue; anything else is the image pass and
-      // gets the sampling-and-accumulation one.
-      const kind = path.basename(file).startsWith('buffer-') ? 'buffer' : 'image';
+      // A pass's role is its filename, which is the whole registration
+      // mechanism: points-*.vert is a scatter pass and compiles as a VERTEX
+      // shader, buffer-*.frag is a simulation step and gets the direct-write
+      // epilogue, anything else is the image pass and gets the
+      // sampling-and-accumulation one.
+      const base = path.basename(file);
+      const kind = file.endsWith('.vert')
+        ? 'points'
+        : base.startsWith('buffer-') ? 'buffer' : 'image';
 
       let result;
       try {

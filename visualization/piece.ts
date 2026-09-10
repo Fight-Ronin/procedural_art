@@ -16,7 +16,7 @@ type ShaderModule = {
   code: string;
   map: { file: string; line: number }[];
   entry: string;
-  kind: 'image' | 'buffer';
+  kind: 'image' | 'buffer' | 'points';
   params: ParamSpec[];
   buffers: import('./params/schema.ts').BufferBinding[];
 };
@@ -29,6 +29,11 @@ export interface PassConfig {
   /** Grid texels on the short side. Absolute, so the piece is size-independent. */
   size?: number;
   substeps?: number;
+  /**
+   * Points drawn per step. Required by a `points-*.vert` pass and meaningless
+   * to any other, both of which are refused by name in `buildPiece`.
+   */
+  count?: number;
 }
 
 /**
@@ -38,7 +43,7 @@ export interface PassConfig {
  * into meta.json and the number is what the shader branches on, and the only
  * way those cannot drift is for exactly one table to exist.
  */
-export const PA_TONEMAP = ['none', 'aces', 'reinhard'] as const;
+export const PA_TONEMAP = ['none', 'aces', 'reinhard', 'tanh'] as const;
 export type TonemapName = (typeof PA_TONEMAP)[number];
 
 export interface BloomConfig {
@@ -257,12 +262,50 @@ export function buildPiece(dir: string, rawMeta: unknown, files: Record<string, 
           `(found: ${Object.keys(files).sort().join(', ')})`,
       );
     }
-    if (shader.kind !== 'buffer') {
-      throw new Error(`${where}: ${pc.shader} is not a buffer pass (name it buffer-*.frag)`);
+    if (shader.kind === 'image') {
+      throw new Error(
+        `${where}: ${pc.shader} is not a pass shader ` +
+          '(name it buffer-*.frag to gather, or points-*.vert to scatter)',
+      );
     }
     if (seen.has(pc.id)) throw new Error(`${where}: two passes share the id "${pc.id}"`);
     seen.add(pc.id);
-    return { id: pc.id, shader, size: pc.size ?? 512, substeps: pc.substeps ?? 1 };
+
+    // `count` is the one field a scatter pass cannot default sensibly. A buffer
+    // pass covers its target exactly once whatever its size; a point pass draws
+    // however many points it is told to and no number is more natural than
+    // another, so silently picking one would be inventing the artwork's
+    // resolution on its behalf. Requiring it also makes the two pass kinds
+    // impossible to confuse in meta.json at a glance.
+    const points = shader.kind === 'points';
+    if (points && (!Number.isInteger(pc.count) || (pc.count as number) < 1)) {
+      throw new Error(
+        `${where}: pass "${pc.id}" draws points, so it needs a positive integer ` +
+          `"count" (got ${JSON.stringify(pc.count)})`,
+      );
+    }
+    if (!points && pc.count !== undefined) {
+      throw new Error(
+        `${where}: pass "${pc.id}" is not a point pass, so "count" means nothing ` +
+          '(a buffer pass covers its whole target)',
+      );
+    }
+    // Substeps advance state. A scatter pass holds none — it is cleared and
+    // redrawn every step — so running it twice is running it once, slower.
+    if (points && pc.substeps !== undefined && pc.substeps !== 1) {
+      throw new Error(
+        `${where}: pass "${pc.id}" draws points, which hold no state between ` +
+          'substeps; put the substeps on the buffer pass that feeds it',
+      );
+    }
+    return {
+      id: pc.id,
+      shader,
+      kind: points ? 'points' : 'buffer',
+      count: pc.count,
+      size: pc.size ?? 512,
+      substeps: pc.substeps ?? 1,
+    };
   });
 
   return {

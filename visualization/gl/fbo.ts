@@ -27,7 +27,7 @@ export function pickFloatFormat(gl: WebGL2RenderingContext): FloatFormat {
   return { internal: gl.RGBA8, type: gl.UNSIGNED_BYTE, name: 'RGBA8', usable: false };
 }
 
-interface Target {
+export interface Target {
   tex: WebGLTexture;
   fbo: WebGLFramebuffer;
 }
@@ -60,6 +60,70 @@ function makeTarget(
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.bindTexture(gl.TEXTURE_2D, null);
   return { tex, fbo };
+}
+
+/**
+ * One float target, for a pass that REBUILDS its contents every step rather
+ * than evolving them.
+ *
+ * A scatter pass is not feedback: the deposit is cleared and redrawn from the
+ * agents each step, so there is no previous state to read and a ping-pong pair
+ * would be twice the memory to hold a texture nothing ever looks at. Whatever
+ * persistence the piece wants — a decaying trail — belongs in an ordinary
+ * buffer pass downstream, where it is visible in the chain instead of hidden
+ * inside the deposit.
+ *
+ * `read` returns itself so the chain can bind either kind of target without
+ * asking which it has.
+ */
+export class Single {
+  readonly format: FloatFormat;
+  width = 0;
+  height = 0;
+  private gl: WebGL2RenderingContext;
+  private t: Target | null = null;
+
+  constructor(gl: WebGL2RenderingContext, format?: FloatFormat) {
+    this.gl = gl;
+    this.format = format ?? pickFloatFormat(gl);
+  }
+
+  resize(w: number, h: number): boolean {
+    if (this.t && this.width === w && this.height === h) return false;
+    this.dispose();
+    this.t = makeTarget(this.gl, this.format, w, h);
+    this.width = w;
+    this.height = h;
+    return true;
+  }
+
+  get read(): Target {
+    if (!this.t) throw new Error('Single used before resize()');
+    return this.t;
+  }
+
+  get write(): Target {
+    return this.read;
+  }
+
+  /** No-op: there is nothing to swap. Present so the chain need not branch. */
+  swap(): void {}
+
+  clear(): void {
+    const { gl } = this;
+    if (!this.t) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.t.fbo);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  dispose(): void {
+    if (!this.t) return;
+    this.gl.deleteFramebuffer(this.t.fbo);
+    this.gl.deleteTexture(this.t.tex);
+    this.t = null;
+  }
 }
 
 /**

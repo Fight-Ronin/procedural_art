@@ -1,4 +1,5 @@
 import { formatShaderError } from '../build/errors.ts';
+import { POINT_FRAGMENT } from '../build/preamble.ts';
 import type { MapEntry } from '../build/include.ts';
 
 /** What the Vite plugin emits for every artwork .frag. */
@@ -18,6 +19,22 @@ void main() {
     vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
     gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
+
+/**
+ * A scatter pass inverts which stage the artwork owns: the piece writes the
+ * VERTEX program (where each point decides where it goes) and viz supplies the
+ * fragment one. Everything else — error formatting, the source map, uniform
+ * discovery — is identical, so only the two sources swap places.
+ */
+export function createPointProgram(
+  gl: WebGL2RenderingContext,
+  mod: ShaderModule,
+): WebGLProgram {
+  return link(gl,
+    compile(gl, gl.VERTEX_SHADER, mod.code, mod),
+    compile(gl, gl.FRAGMENT_SHADER, POINT_FRAGMENT, null),
+    mod);
+}
 
 export class ShaderCompileError extends Error {
   entry: string;
@@ -50,12 +67,12 @@ function compile(
   );
 }
 
-export function createProgram(
+function link(
   gl: WebGL2RenderingContext,
+  vs: WebGLShader,
+  fs: WebGLShader,
   mod: ShaderModule,
 ): WebGLProgram {
-  const vs = compile(gl, gl.VERTEX_SHADER, VERT, null);
-  const fs = compile(gl, gl.FRAGMENT_SHADER, mod.code, mod);
   const program = gl.createProgram();
   if (!program) throw new Error('createProgram failed');
   gl.attachShader(program, vs);
@@ -66,12 +83,19 @@ export function createProgram(
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     const log = gl.getProgramInfoLog(program) ?? '(no log)';
     gl.deleteProgram(program);
-    throw new ShaderCompileError(
-      formatShaderError(log, mod.code, mod.map),
-      mod.entry,
-    );
+    throw new ShaderCompileError(formatShaderError(log, mod.code, mod.map), mod.entry);
   }
   return program;
+}
+
+export function createProgram(
+  gl: WebGL2RenderingContext,
+  mod: ShaderModule,
+): WebGLProgram {
+  return link(gl,
+    compile(gl, gl.VERTEX_SHADER, VERT, null),
+    compile(gl, gl.FRAGMENT_SHADER, mod.code, mod),
+    mod);
 }
 
 /** Cache of uniform locations; missing names resolve to null and are skipped. */

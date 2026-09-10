@@ -27,9 +27,10 @@ export type { PassConfig, Piece, PieceMeta } from './piece.ts';
 // including the watcher registration that hot-reloads a piece when a basics/
 // file it includes is edited. The metadata comes from catalog.ts, so the gallery
 // and the viewer discover artwork/ once rather than twice.
-const SHADERS = import.meta.glob<{ default: ShaderModule }>('../artwork/*/*.frag', {
-  eager: true,
-});
+const SHADERS = import.meta.glob<{ default: ShaderModule }>(
+  ['../artwork/*/*.frag', '../artwork/*/*.vert'],
+  { eager: true },
+);
 
 function discover(): Piece[] {
   const byDir = new Map<string, { meta?: unknown; files: Record<string, ShaderModule> }>();
@@ -45,7 +46,7 @@ function discover(): Piece[] {
 
   const pieces: Piece[] = [];
   for (const [dir, e] of byDir) {
-    // A .frag with no meta.json is a work in progress, not an error — but a
+    // A shader with no meta.json is a work in progress, not an error — but a
     // meta.json with no shaders is a piece that will not load, so let it throw.
     if (e.meta === undefined && Object.keys(e.files).length > 0) continue;
     pieces.push(buildPiece(dir, e.meta, e.files));

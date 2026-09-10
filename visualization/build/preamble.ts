@@ -49,7 +49,10 @@ uniform int uInit;
 uniform int uSubstep;
 uniform int uSubsteps;
 
-out vec4 pa_fragColor;
+// NOTE: the pa_fragColor output is declared by each EPILOGUE, not here. A point
+// pass compiles this same block as a VERTEX shader, where a fragment output is
+// a compile error, so everything above this line has to be stage-neutral.
+// (And no backticks in this file's GLSL: it lives in a JS template literal.)
 
 // ---- per-sample state, set by the epilogue before each mainImage() ---------
 // paSample is a GLOBALLY MONOTONIC ordinal, not an index within this draw.
@@ -151,6 +154,7 @@ vec2 paUv(vec2 fragCoord) { return fragCoord / uFullRes; }
 
 /** Appended after the artwork's mainImage() in the final image pass. */
 export const EPILOGUE_IMAGE = `
+out vec4 pa_fragColor;
 void main() {
     vec2 pix = floor(gl_FragCoord.xy) + uTileOrigin;
     paPixel = pix;
@@ -189,6 +193,7 @@ void main() {
  * every step rather than the same field over and over.
  */
 export const EPILOGUE_BUFFER = `
+out vec4 pa_fragColor;
 void main() {
     vec2 pix = floor(gl_FragCoord.xy);
     paPixel = pix;
@@ -248,7 +253,7 @@ uniform vec2 uTileOrigin;
 // One output step, in display units. Zero disables dithering entirely.
 uniform float uDitherLsb;
 
-// The display transform. 0 none, 1 ACES, 2 Reinhard — see PA_TONEMAP in
+// The display transform. 0 none, 1 ACES, 2 Reinhard, 3 tanh — see PA_TONEMAP in
 // visualization/piece.ts, which is the one place the names are mapped.
 uniform float uDisplayExposure;
 uniform int   uDisplayTonemap;
@@ -298,6 +303,7 @@ void main() {
     vec3 lin = colExposure(s.rgb, uDisplayExposure);
     if (uDisplayTonemap == 1)      lin = colTonemapAces(lin);
     else if (uDisplayTonemap == 2) lin = colTonemapReinhard(lin, 2.0);
+    else if (uDisplayTonemap == 3) lin = colTonemapTanh(lin);
     // 0 leaves it alone. That is the right answer for a piece whose colours are
     // already display-referred — a flat graphic has no highlight to roll off,
     // and running a concave curve over its coverage blending is exactly the
@@ -382,6 +388,89 @@ void main() {
 }
 `;
 
+
+/**
+ * The point pass: a VERTEX stage, one invocation per point.
+ *
+ * This is the repo's first pass that scatters instead of gathering. Every other
+ * pass is a fullscreen triangle where each fragment asks "what is at me?";
+ * here N points each say "I go there, and I deposit this", and the image is
+ * what accumulates. A pixel cannot answer the scatter question by gathering —
+ * it would have to test all N points — which is why Physarum, attractor plots
+ * and particle deposition were not merely unwritten before this but
+ * unwriteable.
+ *
+ * The artwork supplies exactly one entry point:
+ *
+ *     void mainPoint(int index, out vec2 pos, out float size, out vec4 deposit)
+ *
+ * `pos` is in ART SPACE — the same coordinates `artCoord` produces and every
+ * image pass already thinks in — so a piece does not have to know the deposit
+ * grid's resolution to place anything. `uFullRes` is that grid for a chain
+ * pass, so the mapping below is exactly the inverse of `artCoord`.
+ *
+ * `paPixel` is seeded from the point's index rather than from a pixel, so
+ * `paRand()` and friends give each point its own stream. That is the only way
+ * the per-sample RNG makes sense in a stage that has no pixel yet.
+ */
+export const EPILOGUE_POINT = `
+out vec4 paPointTint;
+// flat: a point sprite has one size for all its fragments, and interpolating
+// it would be meaningless as well as wasteful.
+flat out float paPointSize;
+
+void main() {
+    int id = gl_VertexID;
+    // Two-dimensional so that neighbouring indices do not share a hash lane.
+    paPixel = vec2(float(id & 0xFFFF), float(id >> 16));
+    paSample = uFrame * max(uSubsteps, 1) + uSubstep;
+    paSeedRng(paPixel, paSample, uSeed);
+
+    vec2 pos = vec2(0.0);
+    float size = 1.0;
+    vec4 deposit = vec4(0.0);
+    mainPoint(id, pos, size, deposit);
+
+    paPointTint = deposit;
+    // Inverse of artCoord() against this target's resolution.
+    vec2 px = pos * min(uFullRes.x, uFullRes.y) + 0.5 * uFullRes;
+    gl_Position = vec4(px / uFullRes * 2.0 - 1.0, 0.0, 1.0);
+    gl_PointSize = max(size, 1.0);
+    paPointSize = gl_PointSize;
+}
+`;
+
+/**
+ * The point pass's fragment stage, which the artwork does not write.
+ *
+ * It is fixed on purpose. The overwhelmingly common deposit is a single texel —
+ * Physarum, attractor plots and particle deposition all want one — and a
+ * per-piece fragment stage would be a second file, a second place for the
+ * uniforms to drift, and a decision to make every time for no benefit.
+ *
+ * Above one texel the sprite is a disc with a soft edge. AT OR BELOW one texel
+ * the mask is exactly 1, checked against the interpolated size rather than
+ * assumed: a size-1 point covers one fragment whose gl_PointCoord is not
+ * guaranteed to be dead centre, and a smoothstep evaluated slightly off centre
+ * would quietly scale every deposit in the piece by something under 1.
+ *
+ * Total deposited energy grows roughly as size^2, which is the honest
+ * behaviour of a bigger brush and NOT normalised away here. A piece that wants
+ * brightness independent of size divides its deposit by size * size.
+ */
+export const POINT_FRAGMENT = `#version 300 es
+precision highp float;
+in vec4 paPointTint;
+flat in float paPointSize;
+out vec4 pa_fragColor;
+
+void main() {
+    float r = length(gl_PointCoord - 0.5) * 2.0;
+    float mask = paPointSize <= 1.5 ? 1.0 : smoothstep(1.0, 0.0, r);
+    pa_fragColor = paPointTint * mask;
+}
+`;
+
 /** Sentinel the resolver sees; the reader maps it back to the artwork file. */
 export const USER_SPEC = '<artwork>';
 
@@ -389,15 +478,16 @@ export const USER_SPEC = '<artwork>';
  * Source string handed to resolveIncludes(). The artwork is pulled in as an
  * ordinary #include so its lines land in the source map under their real path.
  */
-export type PassKind = 'image' | 'buffer';
+export type PassKind = 'image' | 'buffer' | 'points';
+
+const EPILOGUE: Record<PassKind, string> = {
+  image: EPILOGUE_IMAGE,
+  buffer: EPILOGUE_BUFFER,
+  points: EPILOGUE_POINT,
+};
 
 export function buildEntrySource(kind: PassKind = 'image'): string {
-  return [
-    PRELUDE,
-    PREAMBLE,
-    `#include "${USER_SPEC}"`,
-    kind === 'buffer' ? EPILOGUE_BUFFER : EPILOGUE_IMAGE,
-  ].join('\n');
+  return [PRELUDE, PREAMBLE, `#include "${USER_SPEC}"`, EPILOGUE[kind]].join('\n');
 }
 
 /** Uniform names viz sets on every program. */

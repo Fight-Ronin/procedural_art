@@ -19,7 +19,7 @@ import { check, note, section, throwsMessage } from './harness.ts';
 
 section('pieces');
 
-const shader = (kind: 'image' | 'buffer'): ShaderModule => ({
+const shader = (kind: 'image' | 'buffer' | 'points'): ShaderModule => ({
   code: '', map: [], entry: 'x.frag', kind, params: [], buffers: [],
 });
 
@@ -120,6 +120,58 @@ await throwsMessage('a main.frag that is a buffer pass is refused',
   () => buildPiece('004-lattice', META, { 'main.frag': shader('buffer') }),
   'image pass must be main.frag');
 
+// --- scatter passes ----------------------------------------------------------
+//
+// A point pass is the first thing in the repo that draws something other than a
+// fullscreen triangle, and the two kinds are distinguished only by a filename.
+// Everything that can be confused between them is refused by name.
+{
+  const withPoints = { ...FILES, 'points-p.vert': shader('points'), 'buffer-a.frag': shader('buffer') };
+
+  // `count` is the one field a scatter pass cannot default sensibly: a buffer
+  // pass covers its target exactly once whatever its size, while a point pass
+  // draws however many points it is told to and no number is more natural than
+  // another. Guessing one would be inventing the artwork's resolution for it.
+  await throwsMessage('a point pass with no count is refused',
+    () => buildPiece('004-lattice', { ...META, passes: [{ id: 'p', shader: 'points-p.vert' }] },
+      withPoints),
+    'needs a positive integer "count"');
+
+  await throwsMessage('a point pass with a nonsense count is refused',
+    () => buildPiece('004-lattice',
+      { ...META, passes: [{ id: 'p', shader: 'points-p.vert', count: 0 }] }, withPoints),
+    'needs a positive integer "count"');
+
+  // The reverse confusion: a count on a gather pass is not harmless, it is a
+  // sign the author thinks that pass draws points.
+  await throwsMessage('a count on a buffer pass is refused',
+    () => buildPiece('004-lattice',
+      { ...META, passes: [{ id: 'a', shader: 'buffer-a.frag', count: 100 }] }, withPoints),
+    'so "count" means nothing');
+
+  // Substeps advance state; a scatter pass is cleared and redrawn every step,
+  // so it holds none. Running it twice is running it once, slower — and the
+  // author who wrote it meant the substeps for the pass that feeds it.
+  await throwsMessage('substeps on a point pass are refused',
+    () => buildPiece('004-lattice',
+      { ...META, passes: [{ id: 'p', shader: 'points-p.vert', count: 10, substeps: 4 }] },
+      withPoints),
+    'hold no state between substeps');
+
+  const built = buildPiece('004-lattice', {
+    ...META,
+    passes: [
+      { id: 'p', shader: 'points-p.vert', size: 512, count: 4096 },
+      { id: 'a', shader: 'buffer-a.frag', size: 512 },
+    ],
+  }, withPoints);
+  check('a point pass and a buffer pass coexist in one chain',
+    built.passes.length === 2 &&
+    built.passes[0].kind === 'points' && built.passes[0].count === 4096 &&
+    built.passes[1].kind === 'buffer',
+    built.passes.map((x) => `${x.id}:${x.kind ?? 'buffer'}`).join(' '));
+}
+
 // Presets are addressed by name everywhere — the GUI dropdown, every CLI's
 // --preset, meta.json's own `preset` field — so a duplicate name makes one of
 // them permanently unreachable, and the unreachable one is whichever was
@@ -156,7 +208,7 @@ await throwsMessage('a pass naming a shader that is not there is refused, and li
 
 await throwsMessage('a pass pointing at the image shader is refused',
   () => buildPiece('004-lattice', { ...META, passes: [{ id: 'a', shader: 'main.frag' }] }, FILES),
-  'not a buffer pass');
+  'not a pass shader');
 
 await throwsMessage('two passes with the same id are refused',
   () => buildPiece('004-lattice',

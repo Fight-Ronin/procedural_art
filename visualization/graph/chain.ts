@@ -1,10 +1,18 @@
-import { PingPong } from '../gl/fbo.ts';
-import { createProgram, Uniforms, type ShaderModule } from '../gl/program.ts';
+import { PingPong, Single } from '../gl/fbo.ts';
+import { createPointProgram, createProgram, Uniforms, type ShaderModule } from '../gl/program.ts';
 import type { BufferBinding } from '../params/schema.ts';
 
 export interface PassSpec {
   id: string;
-  shader: ShaderModule & { buffers: BufferBinding[] };
+  shader: ShaderModule & { buffers: BufferBinding[]; kind?: string };
+  /**
+   * 'buffer' gathers — a fullscreen triangle, one evaluation per texel.
+   * 'points' scatters — `count` point primitives, additively blended, each one
+   * deciding for itself where it lands. See EPILOGUE_POINT in preamble.ts.
+   */
+  kind?: 'buffer' | 'points';
+  /** Points drawn per step. Ignored by a buffer pass. */
+  count?: number;
   /**
    * Simulation grid size in texels along the SHORT side. Absolute, not a
    * fraction of the display: the pattern scale is set by the grid, so tying it
@@ -19,7 +27,7 @@ export interface PassSpec {
 interface LivePass extends PassSpec {
   program: WebGLProgram;
   uniforms: Uniforms;
-  target: PingPong;
+  target: PingPong | Single;
 }
 
 export interface StepParams {
@@ -70,12 +78,17 @@ export class PassChain {
   setPasses(specs: PassSpec[]): void {
     this.dispose();
     this.passes = specs.map((spec) => {
-      const program = createProgram(this.gl, spec.shader);
+      const points = spec.kind === 'points';
+      const program = points
+        ? createPointProgram(this.gl, spec.shader)
+        : createProgram(this.gl, spec.shader);
       return {
         ...spec,
         program,
         uniforms: new Uniforms(this.gl, program),
-        target: new PingPong(this.gl),
+        // A scatter pass is rebuilt from scratch every step, so it has no
+        // previous state to read and needs only one target. See Single.
+        target: points ? new Single(this.gl) : new PingPong(this.gl),
       };
     });
     this.pendingInit = true;
@@ -163,7 +176,24 @@ export class PassChain {
     this.bind(u, pass.shader.buffers, 1, pass.id);
     if (applyParams) applyParams(u);
 
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (pass.kind === 'points') {
+      // Cleared first, because the deposit is what this step's points put
+      // there and nothing else. Persistence across steps is a downstream
+      // buffer pass's job, where it is visible in the chain rather than an
+      // implicit property of a target nobody clears.
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      // ONE, ONE on all four channels: points that land on the same texel sum.
+      // Deterministic despite the float addition, because GL blends primitives
+      // in submission order and the submission order is gl_VertexID — which is
+      // what lets a scatter pass keep the repo's bit-identity guarantees.
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.drawArrays(gl.POINTS, 0, Math.max(0, pass.count ?? 0));
+      gl.disable(gl.BLEND);
+    } else {
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     pass.target.swap();
   }
