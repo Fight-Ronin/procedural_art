@@ -439,3 +439,53 @@ syntax error pointing at a line of shader code. `npm run check` catches it.
 float accumulator. Division and the sRGB encode belong to the resolve pass, and
 `RESOLVE_SOURCE` goes through the include resolver so the transfer function is
 not duplicated.
+
+## Version control, and the day it was needed
+
+The repo went twenty-two blocks with **zero commits** while more than one
+session edited it at once, and on the last of those the bill came due:
+`test/render.test.ts` was written back from a snapshot taken before another
+session's work, and a per-piece override — the one saying 012 compares at 120px
+rather than the default 200 — silently vanished. Nothing went red. The suite
+went on passing, because losing an override does not break a test, it just
+quietly runs a different one. It was found by reading the file, not by running
+anything.
+
+So: **commit before you start, and commit when you stop.** The first commit is
+one command and the repo is already prepared for it — `.gitignore` covers
+`node_modules/`, `dist/`, `artwork/*/out/` and `artwork/out/`, and
+`.gitattributes` pins LF (which `test/layers.test.ts` checks, because
+`tools/fingerprint.ts` hashes raw bytes and a CRLF checkout would make every
+`ref.json` report that `basics/` had changed on a fresh clone).
+
+```
+git add -A && git commit -m "..."
+```
+
+What that takes in today is about 175 files and 4.8 MB, three quarters of it the
+committed `thumb.png` and `ref.png` — which belong in the piece directories on
+purpose, since they are the regression net and the gallery, not renders. Nothing
+else large is untracked. Check that it stays that way: a stray 4000px export
+inside a piece directory rather than under its `out/` would sail straight in.
+
+**Two sessions on one tree is the case to plan for**, because it is now the
+normal case. Two rules make it survivable:
+
+- **Whole files are the unit of collision.** When work lands by writing files
+  rather than merging them, an edit is safe only if nobody else touched that
+  file since you read it. Check the modification time you read against the one
+  you are about to overwrite, and if it moved, re-read and merge instead of
+  writing. That is what caught nothing this time because it was not done, and
+  what protected `spaces.glsl`, `camera.glsl` and `run.ts` when it was.
+- **A shared table is the dangerous shape.** `OVERRIDES` in
+  `test/render.test.ts` and `SUITES` in `test/run.ts` are single lists that every
+  piece and every suite has to appear in, so two sessions adding two pieces
+  collide by construction while two sessions adding two *directories* do not.
+  Prefer discovery over registration wherever it is available — the reason
+  `visualization/pieces.ts` globs rather than imports is exactly this, and
+  `test/pieces.test.ts` exists to keep it that way.
+
+The block records under the project's `claude/` directory are the other half of
+this. They are numbered, and two sessions have already produced two different
+"block 20" against two different trees — so a block number is a claim about
+*which tree*, not about time. Say which.
