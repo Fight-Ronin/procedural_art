@@ -1,0 +1,158 @@
+{
+  "id": "010",
+  "slug": "orbit",
+  "title": "Orbit",
+  "display": {
+    "exposure": 0,
+    "tonemap": "none"
+  },
+  "date": "2026-09-07",
+  "tags": [
+    "points",
+    "scatter",
+    "attractor",
+    "stateful"
+  ],
+  "passes": [
+    {
+      "id": "plot",
+      "shader": "points-plot.vert",
+      "size": 700,
+      "count": 120000
+    },
+    {
+      "id": "accum",
+      "shader": "buffer-accum.frag",
+      "size": 700
+    }
+  ],
+  "poster": {
+    "frame": 120,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 20,
+    "fps": 60
+  },
+  "still": {
+    "width": 3000,
+    "height": 3000,
+    "spp": 8
+  },
+  "thumb": {
+    "draws": 2,
+    "spp": 2
+  },
+  "presets": [
+    {
+      "name": "dejong",
+      "values": {
+        "uDecay": 0.95,
+        "uGain": 90,
+        "uGamma": 0.72,
+        "uPalA": "#14161f",
+        "uPalB": "#4a6fa8",
+        "uPalC": "#ffd9a0",
+        "uSpeedTint": 0.6,
+        "uVignette": 0.3,
+        "uK": [
+          1.641,
+          1.902,
+          0.316,
+          1.525
+        ],
+        "uMap": 0,
+        "uWarm": 14,
+        "uZoom": 0.455,
+        "uPan": [
+          0.015,
+          0.061
+        ],
+        "uWeight": 0.35,
+        "uSpread": 0.55,
+        "uFlow": 0.22,
+        "uFlowRate": 0.16,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    },
+    {
+      "name": "clifford",
+      "values": {
+        "uDecay": 0.95,
+        "uGain": 90,
+        "uGamma": 0.72,
+        "uPalA": "#14161f",
+        "uPalB": "#4a6fa8",
+        "uPalC": "#ffd9a0",
+        "uSpeedTint": 0.6,
+        "uVignette": 0.3,
+        "uK": [
+          -1.4,
+          1.6,
+          1,
+          0.7
+        ],
+        "uMap": 1,
+        "uWarm": 14,
+        "uZoom": 0.514,
+        "uPan": [
+          -0.074,
+          -0.019
+        ],
+        "uWeight": 0.35,
+        "uSpread": 0.55,
+        "uFlow": 0.22,
+        "uFlowRate": 0.16,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    },
+    {
+      "name": "still",
+      "values": {
+        "uDecay": 1,
+        "uGain": 90,
+        "uGamma": 0.72,
+        "uPalA": "#14161f",
+        "uPalB": "#4a6fa8",
+        "uPalC": "#ffd9a0",
+        "uSpeedTint": 0.6,
+        "uVignette": 0.3,
+        "uK": [
+          1.4,
+          1.56,
+          1.4,
+          -2.56
+        ],
+        "uMap": 2,
+        "uWarm": 14,
+        "uZoom": 0.44,
+        "uPan": [
+          0,
+          0.01
+        ],
+        "uWeight": 0.35,
+        "uSpread": 0.55,
+        "uFlow": 0,
+        "uFlowRate": 0.16,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 0
+      }
+    }
+  ],
+  "notes": "A strange attractor plotted by scatter — N orbits per frame, iterated past their transient and deposited where they land. The repo's first pass that scatters rather than gathers, chosen because an attractor's invariant measure is the simplest thing no function of position can return.\n\nIT NOW MOVES. The map's four constants drift on incommensurate frequencies (uFlow, uFlowRate), so the subject is how the measure DEFORMS as the map changes rather than one fixed measure. Before this the twenty-second video was a picture converging and then repeating for 900 frames.\n\nWhat blocked it was a normalisation. The image pass divided the accumulator by the elapsed frame count, which is only correct at retention exactly 1: below that the accumulator saturates at 1/(1-r) while the divisor keeps growing, so the piece faded to black at a rate nobody chose — measured at r=0.95 falling 64.5 to 59.0 to 48.3 across frames 12, 40 and 120. uDecay was not a retention knob, it was a slow fade-out, and the piece could only ever be used at 1.0. The divisor is now the closed form of the geometric series, which degrades to the frame count as r approaches 1; the same three measurements now read 67.7 / 69.0 / 69.2. Fifth appearance of a normalisation that assumed a configuration.\n\nThe framing bound deliberately uses the BASE constants, not the drifting ones: recomputing it would renormalise the picture every frame, so the attractor would pulse in size and the trail would smear every filament radially.\n\nPrint wants the opposite of flow: --preset still turns the drift off and retention to 1, giving the converged plot of a single map.",
+  "ref": {
+    "size": 100,
+    "draws": 2,
+    "spp": 2,
+    "frame": 24,
+    "seed": 0
+  }
+}
