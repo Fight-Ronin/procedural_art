@@ -20,6 +20,28 @@ vec3 colSrgbToLinear(vec3 c) {
     return vec3(colSrgbToLinear1(c.r), colSrgbToLinear1(c.g), colSrgbToLinear1(c.b));
 }
 
+// ---- CIE XYZ ---------------------------------------------------------------
+
+/**
+ * CIE 1931 XYZ (D65) to linear sRGB.
+ *
+ * Here rather than beside the blackbody that needed it, because it is a colour
+ * space conversion and this is where those live. The inverse is not written:
+ * nothing has wanted it yet, and an untested direction is worse than an absent
+ * one.
+ *
+ * The result can be NEGATIVE. That is not an error to clamp away inside the
+ * conversion — it means the colour is outside the sRGB gamut, which a spectral
+ * source routinely is, and the caller is the only one who knows whether to
+ * clamp, desaturate or keep the value for a wider working space.
+ */
+vec3 colXyzToLinear(vec3 xyz) {
+    return vec3(
+         3.2406 * xyz.x - 1.5372 * xyz.y - 0.4986 * xyz.z,
+        -0.9689 * xyz.x + 1.8758 * xyz.y + 0.0415 * xyz.z,
+         0.0557 * xyz.x - 0.2040 * xyz.y + 1.0570 * xyz.z);
+}
+
 // ---- Oklab (Björn Ottosson) ------------------------------------------------
 // Perceptually uniform. Interpolate here, not in sRGB, or your gradients pick
 // up muddy grey midpoints and hue shifts through the blues.
