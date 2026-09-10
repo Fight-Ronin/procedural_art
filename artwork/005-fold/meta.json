@@ -1,0 +1,110 @@
+{
+  "id": "005",
+  "slug": "fold",
+  "title": "Fold",
+  "display": {
+    "exposure": -0.1,
+    "tonemap": "aces"
+  },
+  "date": "2026-09-08",
+  "tags": [
+    "raymarch",
+    "sdf",
+    "fractal",
+    "brdf",
+    "distance-estimator"
+  ],
+  "poster": {
+    "frame": 0,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 20,
+    "fps": 60
+  },
+  "still": {
+    "width": 3600,
+    "height": 3600,
+    "spp": 24
+  },
+  "presets": [
+    {
+      "name": "porcelain",
+      "values": {
+        "uFoldScale": -1.85,
+        "uIters": 9,
+        "uSpin": 0.05,
+        "uSpread": 1,
+        "uDetail": 0.0015,
+        "uShell": "#e8dcc4",
+        "uCore": "#5b6f8c",
+        "uDepthMix": 1,
+        "uDepthLo": 6.2,
+        "uDepthScale": 3.6,
+        "uRough": 0.42,
+        "uMetal": 0.1,
+        "uSunYaw": 1,
+        "uSunPitch": 0.45,
+        "uSunPower": 4,
+        "uSunColor": "#fff0d8",
+        "uSkyUp": "#a8bdd4",
+        "uSkyDown": "#2a2620",
+        "uAmbient": 0.6,
+        "uDist": 4.5,
+        "uHeight": 0.8,
+        "uYaw": 0.6,
+        "uAo": 0.85,
+        "uVignette": 0.4,
+        "uDisplayExposure": -0.1,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    },
+    {
+      "name": "ribs",
+      "values": {
+        "uFoldScale": -2.6,
+        "uIters": 9,
+        "uSpin": 0.05,
+        "uSpread": 1,
+        "uDetail": 0.0015,
+        "uShell": "#e8dcc4",
+        "uCore": "#5b6f8c",
+        "uDepthMix": 1,
+        "uDepthLo": 8.6,
+        "uDepthScale": 2.6,
+        "uRough": 0.42,
+        "uMetal": 0.1,
+        "uSunYaw": 1,
+        "uSunPitch": 0.45,
+        "uSunPower": 4,
+        "uSunColor": "#fff0d8",
+        "uSkyUp": "#a8bdd4",
+        "uSkyDown": "#2a2620",
+        "uAmbient": 0.6,
+        "uDist": 4.5,
+        "uHeight": 0.8,
+        "uYaw": 0.6,
+        "uAo": 0.85,
+        "uVignette": 0.4,
+        "uDisplayExposure": -0.1,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 1
+      }
+    }
+  ],
+  "notes": "Inside a Mandelbox: recursive architecture, lit. Replaced a piece under the same number — 005 was an eroded boulder on a plane, and two rounds of sweeps established its weakness was not reachable by parameters, because the subject was one centred blob and no knob changes what a picture is. Forced basics/sdf/fractal.glsl, and with it the repo's first distance ESTIMATE rather than an exact distance.\n\nWas called Gasket and carried an Apollonian packing on a switch; both are gone. The Apollonian's abs(p.y) measure leaves a solid plate through the picture, sweeps produced nine variations on a lamp, and the switch left three parameters inert in the piece's actual look — which the render suite caught as a parameter delta of exactly zero.\n\nThree things had to be measured rather than guessed. The sun was BEHIND the subject (a sweep of sun power against sky fill returned three identical rows). The depth ramp's floor sat above the median of the range it read — a probe marching this camera and reporting depth at the hits only puts the visible range at 6 to 10, against a floor of 8.4 — so two thirds of every surface clamped to one flat cream. And the framing: at uDist 9.6 this is a small ornamented cube on grey, at 4.5 the camera is inside the structure and the same function reads as vaults and shafts at four scales.\n\nThe one piece here that does not cone-trace. A shape with detail at every scale has no resolution-independent definition if the marching tolerance follows the pixel — measured at mean 14/255 between a 100px render and a 300px one averaged down — so the cutoff is absolute and uDetail owns it.",
+  "ref": {
+    "size": 110,
+    "draws": 2,
+    "spp": 2,
+    "frame": 0,
+    "seed": 0
+  },
+  "thumb": {
+    "draws": 4,
+    "spp": 4
+  }
+}
