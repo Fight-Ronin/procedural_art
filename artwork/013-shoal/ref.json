@@ -1,0 +1,19 @@
+{
+  "piece": "013",
+  "config": {
+    "size": 100,
+    "draws": 2,
+    "spp": 2,
+    "frame": 24,
+    "seed": 0
+  },
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "glVersion": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+  "format": "RGBA32F",
+  "generated": "2026-09-10T00:00:42.760Z",
+  "sources": {
+    "basics": "2e806d30b2171a35",
+    "build": "12181731c7bd5884",
+    "piece": "20509d8803e6870b"
+  }
+}

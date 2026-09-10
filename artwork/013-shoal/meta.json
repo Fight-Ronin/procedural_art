@@ -1,0 +1,57 @@
+{
+  "id": "013",
+  "slug": "shoal",
+  "title": "Shoal",
+  "display": {
+    "exposure": 0,
+    "tonemap": "none"
+  },
+  "date": "2026-09-09",
+  "tags": [
+    "absorption",
+    "caustic",
+    "points",
+    "scatter",
+    "spectral",
+    "stateful",
+    "waves"
+  ],
+  "passes": [
+    {
+      "id": "splat",
+      "shader": "points-splat.vert",
+      "size": 900,
+      "count": 262144
+    },
+    {
+      "id": "accum",
+      "shader": "buffer-accum.frag",
+      "size": 900
+    }
+  ],
+  "poster": {
+    "frame": 120,
+    "seed": 0
+  },
+  "still": {
+    "width": 3000,
+    "height": 2000,
+    "spp": 8
+  },
+  "thumb": {
+    "draws": 2,
+    "spp": 2
+  },
+  "notes": "Caustics on a wedge-shaped floor. Light through a water surface is deflected by the gradient of its phase, and the picture is where the rays pile up — flux conservation, with no intensity formula evaluated anywhere.\n\nTHE SURFACE IS A SUM OF TRAVELLING GRAVITY WAVES, not noise. The first version used fbm and made a convincing caustic that did not look like water and could not be made to flow; both complaints have one cause. Water is a superposition of waves whose speeds depend on their wavelengths (omega = sqrt(g k)), so long swells outrun short chop and the pattern reorganises in place instead of sliding. That dispersion is also the only honest escape from 001's finding that a composed field pushed through a single moving offset can only ever translate — with one speed for everything there is one offset for everything.\n\nThe wedge is the composition decision. The distance-and-relief parameter `a` grows from the shallow edge to the deep one, and a caustic appears where `a` reaches the reciprocal of the local curvature, so one frame carries the whole one-parameter unfolding: smooth, first folds, cusps, tangle. It also makes the main knob and the tone ramp span their real range by construction, which is the two failures this gallery repeats most.\n\nuSpread decides what KIND of caustic this is. A single wave is a cylindrical lens — its Hessian is rank one, pinned in test/wave.test.ts — so a narrow spread draws long parallel bands, and only components travelling in different directions close them into the polygonal net.\n\nTHE COLOUR IS COMPUTED, NOT PAINTED. Each photon is attenuated per wavelength along the water above where it lands (uMurk), and pure water absorbs red about a hundred times more strongly than blue — so the deep edge of the wedge loses its red and goes blue while the shallow edge stays warm. The same wedge therefore now buys three things: focal distance, brightness, and hue. The ramp is left to be the FLOOR — pale tile in sun, lit and shadowed — because a teal ramp fought the absorption and turned the whole frame monochrome.\n\nLight dispersion is stated in units of real water (uDisperse = 1), so the default of 6 is visibly exaggeration rather than a number that looks physical.",
+  "ref": {
+    "size": 100,
+    "draws": 2,
+    "spp": 2,
+    "frame": 24,
+    "seed": 0
+  },
+  "video": {
+    "seconds": 20,
+    "fps": 60
+  }
+}

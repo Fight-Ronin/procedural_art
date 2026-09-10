@@ -56,6 +56,25 @@ vec2 quinticD(vec2 t) {
     return 30.0 * t * t * (t * (t - 2.0) + 1.0);
 }
 
+/**
+ * Second derivative of quintic smoothstep: 120t^3 - 180t^2 + 60t.
+ *
+ * IT VANISHES AT BOTH ENDS, and that is the whole reason gradient noise uses a
+ * quintic rather than the cubic `smoothstep`. Both interpolants have zero FIRST
+ * derivative at 0 and 1, so both give a C1 field and both look identical to the
+ * eye. Only the quintic has zero SECOND derivative there, which is what makes
+ * the field C2 — and therefore what makes its Hessian continuous across the
+ * lattice lines instead of jumping by 6*(the local blend) at every cell edge.
+ *
+ * Nothing needed that until `noise/hessian.glsl`. A curvature-driven picture
+ * built on the cubic would have shown the lattice as a grid of creases, which
+ * reads as "the noise is grid-aligned" rather than as "the interpolant is only
+ * C1" — a cause almost impossible to guess from the picture.
+ */
+vec2 quinticDD(vec2 t) {
+    return 60.0 * t * (t * (2.0 * t - 3.0) + 1.0);
+}
+
 /** Peaks at 1.0 when x == k, decays either side. IQ's exponential impulse. */
 float impulse(float x, float k) { float h = k * x; return h * exp(1.0 - h); }
 

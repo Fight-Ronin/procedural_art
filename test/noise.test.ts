@@ -152,6 +152,290 @@ ok = vec3(
       tested > c.total / 3, d);
   }
 
+  // --- the Hessian: analytic second derivatives -----------------------------
+  //
+  // 013 draws the zero set of `det(I - a H)`, so an error in H does not soften
+  // the picture, it MOVES the lines — by e/s where s is the slope with which
+  // the determinant crosses zero, which is unbounded exactly where the cusps
+  // are. Nothing downstream can notice that, because a displaced caustic is
+  // still a perfectly convincing caustic.
+  //
+  // Checked against central differences of the ANALYTIC gradient (verified
+  // above), not of the value: differencing the value twice would square the
+  // roundoff and measure the difference scheme rather than the derivative.
+  //
+  // WHAT IS ASSERTED IS THAT THE RESIDUAL SHRINKS, not that it is small. A
+  // wrong Hessian leaves a residual that does not shrink at all — measured
+  // below — while a right one leaves the stencil's own truncation. The second
+  // order itself is reported rather than asserted: at a point where the leading
+  // truncation term nearly cancels, err1 is accidentally small and the ratio
+  // stops being informative, which is a property of the sample rather than of
+  // the derivative. Measured, the ratio clears 2.5 at 4023/4088 points and 1.5
+  // at 4072; the two deliberately broken versions below clear 1.5 at 503 and 1.
+  {
+    const img = await runProbe(s, {
+      includes: ['noise/hessian.glsl'],
+      body: `${POINT}
+mat2 h;
+vec3 nd = nzGrad21dd(sp, h);
+
+// The value and gradient must be the SAME field as noise/deriv.glsl's, or a
+// shader mixing the two is silently using two different noises.
+vec3 ref = nzGrad21d(sp);
+
+float e1 = 0.02;
+float e2 = 0.01;
+mat2 d1 = mat2(
+    (nzGrad21d(sp + vec2(e1, 0.0)).yz - nzGrad21d(sp - vec2(e1, 0.0)).yz) / (2.0 * e1),
+    (nzGrad21d(sp + vec2(0.0, e1)).yz - nzGrad21d(sp - vec2(0.0, e1)).yz) / (2.0 * e1));
+mat2 d2 = mat2(
+    (nzGrad21d(sp + vec2(e2, 0.0)).yz - nzGrad21d(sp - vec2(e2, 0.0)).yz) / (2.0 * e2),
+    (nzGrad21d(sp + vec2(0.0, e2)).yz - nzGrad21d(sp - vec2(0.0, e2)).yz) / (2.0 * e2));
+
+float err1 = length(h[0] - d1[0]) + length(h[1] - d1[1]);
+float err2 = length(h[0] - d2[0]) + length(h[1] - d2[1]);
+float ratio = err1 / max(err2, 1.0e-12);
+
+// Below this the residual is roundoff, which grows as 1/h while truncation
+// falls as h^2, and halving the step stops helping.
+float meaningful = step(3.0e-3, err1);
+float shrinks = max(step(1.5, ratio), 1.0 - meaningful);
+
+// The backstop is RELATIVE to the Hessian's own size. An absolute one would be
+// a different test at every octave count, since |H| grows with the finest
+// frequency squared — which is how the first version of the fbm case below
+// failed at 139 points for having a large Hessian rather than a wrong one.
+float mag = length(h[0]) + length(h[1]);
+
+ok = vec3(
+    min(shrinks, step(err2, 0.2 * mag)),
+    step(length(nd - ref), 1.0e-6),
+    min(meaningful, step(2.5, ratio)));
+`,
+    }, N);
+    const c = countFailures(img);
+    const secondOrder = c.total - c.failed[2];
+    const d = `residual shrinks: ${c.total - c.failed[0]}/${c.total}  ` +
+      `value and gradient agree with nzGrad21d: ${c.total - c.failed[1]}/${c.total}  ` +
+      `and clears second order at ${secondOrder}/${c.total}`;
+    check('nzGrad21dd leaves a residual that shrinks with the step size',
+      c.total - c.failed[0] >= c.total * 0.99, d);
+    check('nzGrad21dd returns the same value and gradient as nzGrad21d',
+      c.failed[1] === 0, d);
+    check('the Hessian convergence check actually exercises something',
+      secondOrder > c.total / 3, d);
+  }
+
+  // --- the control for the single cell: the mixed term ----------------------
+  //
+  // `du.x * du.y * k2` is the term that comes only from the bilinear corner. It
+  // vanishes wherever the four corner values happen to be separable, so a probe
+  // on axis-aligned test data would never see it missing, and the resulting
+  // Hessian is right along the lattice and wrong between it.
+  //
+  // Rebuilt here without that term, on the same inputs, and required to BOTH
+  // disagree with the real one and fail the convergence check the real one
+  // passes. Without this the check above would pass just as happily on a
+  // Hessian missing a term, because the residual of a nearly-right Hessian
+  // still shrinks over most of the plane.
+  {
+    const img = await runProbe(s, {
+      includes: ['noise/hessian.glsl'],
+      body: `${POINT}
+mat2 h;
+vec3 nd = nzGrad21dd(sp, h);
+
+vec2 ip = floor(sp);
+vec2 f  = fract(sp);
+vec2 u = quintic(f), du = quinticD(f), ddu = quinticDD(f);
+vec2 ga = nzGradVec(ip + vec2(0.0, 0.0));
+vec2 gb = nzGradVec(ip + vec2(1.0, 0.0));
+vec2 gc = nzGradVec(ip + vec2(0.0, 1.0));
+vec2 gd = nzGradVec(ip + vec2(1.0, 1.0));
+float va = dot(ga, f);
+float vb = dot(gb, f - vec2(1.0, 0.0));
+float vc = dot(gc, f - vec2(0.0, 1.0));
+float vd = dot(gd, f - vec2(1.0, 1.0));
+float k0 = vb - va;            vec2 dk0 = gb - ga;
+float k1 = vc - va;            vec2 dk1 = gc - ga;
+float k2 = va - vb - vc + vd;  vec2 dk2 = ga - gb - gc + gd;
+vec2 m = vec2(k0 + u.y * k2, k1 + u.x * k2);
+float bxx = 2.0 * du.x * (dk0.x + u.y * dk2.x) + ddu.x * m.x;
+float byy = 2.0 * du.y * (dk1.y + u.x * dk2.y) + ddu.y * m.y;
+// The one difference: du.x * du.y * k2 is dropped.
+float bxy = du.x * (dk0.y + u.y * dk2.y) + du.y * (dk1.x + u.x * dk2.x);
+mat2 broken = NZ_GRAD_SCALE * mat2(bxx, bxy, bxy, byy);
+
+float e1 = 0.02;
+float e2 = 0.01;
+mat2 d1 = mat2(
+    (nzGrad21d(sp + vec2(e1, 0.0)).yz - nzGrad21d(sp - vec2(e1, 0.0)).yz) / (2.0 * e1),
+    (nzGrad21d(sp + vec2(0.0, e1)).yz - nzGrad21d(sp - vec2(0.0, e1)).yz) / (2.0 * e1));
+mat2 d2 = mat2(
+    (nzGrad21d(sp + vec2(e2, 0.0)).yz - nzGrad21d(sp - vec2(e2, 0.0)).yz) / (2.0 * e2),
+    (nzGrad21d(sp + vec2(0.0, e2)).yz - nzGrad21d(sp - vec2(0.0, e2)).yz) / (2.0 * e2));
+
+float gap = length(h[0] - broken[0]) + length(h[1] - broken[1]);
+float b1 = length(broken[0] - d1[0]) + length(broken[1] - d1[1]);
+float b2 = length(broken[0] - d2[0]) + length(broken[1] - d2[1]);
+float bratio = b1 / max(b2, 1.0e-12);
+
+ok = vec3(step(0.05, gap), 1.0 - step(1.5, bratio), step(0.05, b2));
+`,
+    }, N);
+    const c = countFailures(img);
+    const d = `differs from the real Hessian: ${c.total - c.failed[0]}/${c.total}  ` +
+      `and its residual does not shrink: ${c.total - c.failed[1]}/${c.total}  ` +
+      `nor is it small: ${c.total - c.failed[2]}/${c.total}`;
+    // A POPULATION BAR, and the shortfall is the point rather than slack. The
+    // dropped term is du.x * du.y * k2, which is itself zero wherever either
+    // quintic derivative vanishes — the whole neighbourhood of every cell edge
+    // — and small wherever the bilinear corner k2 is. So roughly a sixth of the
+    // plane cannot tell the two apart at all, and a probe that happened to
+    // sample only there would have reported a Hessian it never checked.
+    check('dropping the mixed term gives a measurably different Hessian',
+      c.total - c.failed[0] >= c.total * 0.8, d);
+    check('and one the convergence check above rejects',
+      c.total - c.failed[1] >= c.total * 0.8, d);
+  }
+
+  // --- the fbm chain rule, one order up ------------------------------------
+  //
+  // Octave i is evaluated at M p, so the Hessian accumulates as M^T H M. The
+  // near-miss is M H M^T, and it is a near-miss in the worst way: it agrees
+  // exactly at one octave (M is the identity) and diverges only as the octave
+  // index grows, so it gets the large folds right and the fine ones wrong.
+  //
+  // THE CONTROL IS THAT WRONG VERSION, accumulated here by hand. Measured, it
+  // clears the shrink test at 1 of 4088 points against the real one's 4033 —
+  // which is what a model error rather than a stencil error looks like.
+  {
+    const img = await runProbe(s, {
+      includes: ['noise/hessian.glsl'],
+      body: `${POINT}
+const int OCT = 3;
+mat2 h;
+vec3 nd = nzFbm21dd(sp, OCT, 2.0, 0.5, h);
+
+// h scaled to the finest octave, as in the gradient case above.
+float e1 = 0.05 / exp2(float(OCT - 1));
+float e2 = e1 * 0.5;
+mat2 g1, g2, g3, g4;
+mat2 d1 = mat2(
+    (nzFbm21dd(sp + vec2(e1, 0.0), OCT, 2.0, 0.5, g1).yz
+   - nzFbm21dd(sp - vec2(e1, 0.0), OCT, 2.0, 0.5, g2).yz) / (2.0 * e1),
+    (nzFbm21dd(sp + vec2(0.0, e1), OCT, 2.0, 0.5, g3).yz
+   - nzFbm21dd(sp - vec2(0.0, e1), OCT, 2.0, 0.5, g4).yz) / (2.0 * e1));
+mat2 d2 = mat2(
+    (nzFbm21dd(sp + vec2(e2, 0.0), OCT, 2.0, 0.5, g1).yz
+   - nzFbm21dd(sp - vec2(e2, 0.0), OCT, 2.0, 0.5, g2).yz) / (2.0 * e2),
+    (nzFbm21dd(sp + vec2(0.0, e2), OCT, 2.0, 0.5, g3).yz
+   - nzFbm21dd(sp - vec2(0.0, e2), OCT, 2.0, 0.5, g4).yz) / (2.0 * e2));
+
+float err1 = length(h[0] - d1[0]) + length(h[1] - d1[1]);
+float err2 = length(h[0] - d2[0]) + length(h[1] - d2[1]);
+float ratio = err1 / max(err2, 1.0e-12);
+float meaningful = step(3.0e-3, err1);
+float shrinks = max(step(1.5, ratio), 1.0 - meaningful);
+float mag = length(h[0]) + length(h[1]);
+
+// The control: the same accumulation with the transform on the wrong side.
+mat2 rot = rot2(NZ_FBM_ROT);
+mat2 mm = mat2(1.0);
+mat2 wrong = mat2(0.0);
+float amp = 1.0;
+float norm = 0.0;
+for (int i = 0; i < OCT; ++i) {
+    mat2 hi;
+    vec3 unused = nzGrad21dd(mm * sp, hi);
+    wrong += amp * (mm * hi * transpose(mm));
+    norm += amp;
+    mm = 2.0 * rot * mm;
+    amp *= 0.5;
+}
+wrong = wrong / max(norm, EPS);
+float w1 = length(wrong[0] - d1[0]) + length(wrong[1] - d1[1]);
+float w2 = length(wrong[0] - d2[0]) + length(wrong[1] - d2[1]);
+float wratio = w1 / max(w2, 1.0e-12);
+
+ok = vec3(
+    min(shrinks, step(err2, 0.2 * mag)),
+    1.0 - step(1.5, wratio),
+    min(meaningful, step(2.5, ratio)));
+`,
+    }, N);
+    const c = countFailures(img);
+    const secondOrder = c.total - c.failed[2];
+    const rejected = c.total - c.failed[1];
+    const d = `residual shrinks: ${c.total - c.failed[0]}/${c.total}  ` +
+      `M H M^T's does not: ${rejected}/${c.total}  ` +
+      `and clears second order at ${secondOrder}/${c.total}`;
+    check('nzFbm21dd leaves a residual that shrinks with the step size',
+      c.total - c.failed[0] >= c.total * 0.98, d);
+    check('putting the transform on the wrong side fails that same check',
+      rejected >= c.total * 0.98, d);
+    check('the fbm Hessian convergence check actually exercises something',
+      secondOrder > c.total / 3, d);
+  }
+
+  // --- why the interpolant is a quintic ------------------------------------
+  //
+  // Both the cubic smoothstep and the quintic have zero FIRST derivative at 0
+  // and 1, so both give a C1 field and the gradient is continuous either way.
+  // Only the quintic has zero SECOND derivative there. On the cubic the Hessian
+  // would jump by 6 times the local blend at every cell edge, and a picture
+  // driven by curvature would show the noise lattice as a grid of creases —
+  // which reads as "this noise is grid-aligned", not as "the interpolant is
+  // one order short".
+  //
+  // Measured as a CONVERGENCE, not a threshold: straddle a lattice line at
+  // distance e and at e/2. A continuous Hessian's jump halves; a discontinuous
+  // one plateaus at the size of the discontinuity. A fixed tolerance could not
+  // tell those apart at any single e.
+  {
+    const img = await runProbe(s, {
+      includes: ['noise/hessian.glsl'],
+      body: `
+vec2 q = (pix + 0.5) / n;
+// Ride along the lattice line x = 3, at 4088 different heights.
+float y = q.x * 5.7 + q.y * 0.0139 - 2.3;
+float e1 = 0.004;
+float e2 = e1 * 0.5;
+
+mat2 a1, b1, a2, b2;
+vec3 u1 = nzGrad21dd(vec2(3.0 - e1, y), a1);
+vec3 u2 = nzGrad21dd(vec2(3.0 + e1, y), b1);
+vec3 u3 = nzGrad21dd(vec2(3.0 - e2, y), a2);
+vec3 u4 = nzGrad21dd(vec2(3.0 + e2, y), b2);
+
+float jump1 = length(a1[0] - b1[0]) + length(a1[1] - b1[1]);
+float jump2 = length(a2[0] - b2[0]) + length(a2[1] - b2[1]);
+
+// The two endpoint values that make it work, stated exactly. The cubic
+// smoothstep's second derivative is 6 - 12t, which is -6 and +6 here.
+float ends = abs(quinticDD(vec2(0.0)).x) + abs(quinticDD(vec2(1.0)).x);
+
+float meaningful = step(1.0e-4, jump1);
+float halves = max(step(jump2 * 1.7, jump1), 1.0 - meaningful);
+
+ok = vec3(halves, step(ends, 1.0e-6), meaningful);
+`,
+    }, N);
+    const c = countFailures(img);
+    const tested = c.total - c.failed[2];
+    const d = `jump halves with the offset: ${c.total - c.failed[0]}/${c.total}  ` +
+      `quinticDD vanishes at both ends: ${c.total - c.failed[1]}/${c.total}  ` +
+      `jump above the roundoff floor at ${tested}/${c.total}`;
+    check('the Hessian is continuous across a lattice line',
+      c.total - c.failed[0] >= c.total * 0.99, d);
+    check("quinticDD is zero at 0 and 1, which is what makes that true",
+      c.failed[1] === 0, d);
+    note(`straddling the lattice line at 0.004 the Hessian differs by more than ` +
+      `the roundoff floor at ${tested}/${c.total} points, so the halving above is ` +
+      `measuring something; the cubic interpolant would leave a jump of 6 times ` +
+      `the local blend that no offset makes smaller`);
+  }
+
   // --- curl: the two identities that make it divergence-free ---------------
   //
   // v = (psi_y, -psi_x) is perpendicular to grad(psi) and exactly as long.
