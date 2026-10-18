@@ -210,6 +210,29 @@ await throwsMessage('a pass pointing at the image shader is refused',
   () => buildPiece('004-lattice', { ...META, passes: [{ id: 'a', shader: 'main.frag' }] }, FILES),
   'not a pass shader');
 
+// lockstep interleaves substeps, so it only means something for two or more
+// buffer passes stepping at the same rate. Each refusal names what is wrong.
+await throwsMessage('lockstep with passes on different substep counts is refused',
+  () => buildPiece('004-lattice', {
+    ...META, lockstep: true,
+    passes: [{ id: 'a', shader: 'buffer-a.frag', substeps: 4 },
+             { id: 'b', shader: 'buffer-b.frag', substeps: 2 }],
+  }, { ...FILES, 'buffer-a.frag': shader('buffer'), 'buffer-b.frag': shader('buffer') }),
+  'must share one substep count (a 4, b 2)');
+
+await throwsMessage('lockstep with a single pass is refused',
+  () => buildPiece('004-lattice', {
+    ...META, lockstep: true, passes: [{ id: 'a', shader: 'buffer-a.frag' }],
+  }, { ...FILES, 'buffer-a.frag': shader('buffer') }),
+  'needs two or more passes');
+
+check('lockstep with matching buffer passes is accepted',
+  buildPiece('004-lattice', {
+    ...META, lockstep: true,
+    passes: [{ id: 'a', shader: 'buffer-a.frag', substeps: 3 },
+             { id: 'b', shader: 'buffer-b.frag', substeps: 3 }],
+  }, { ...FILES, 'buffer-a.frag': shader('buffer'), 'buffer-b.frag': shader('buffer') }).meta.lockstep === true);
+
 await throwsMessage('two passes with the same id are refused',
   () => buildPiece('004-lattice',
     { ...META, passes: [{ id: 'a', shader: 'buffer-a.frag' },

@@ -107,7 +107,7 @@ const gui = new Gui(store, {
 function load(next: Piece): void {
   try {
     renderer.setShader(next.shader);
-    chain.setPasses(next.passes);
+    chain.setPasses(next.passes, next.meta.lockstep === true);
     piece = next;
     store.adopt(next.params);
     gui.rebuild(store);
@@ -621,6 +621,13 @@ const hook = {
     },
     setParam(name: string, value: number | number[] | boolean) {
       store.set(name, value);
+    },
+    passState(id: string) {
+      const st = chain.readState(id);
+      return { width: st.width, height: st.height, data: Array.from(st.data) };
+    },
+    setPassSize(id: string, size: number | null) {
+      chain.setSize(id, size);
     },
     snapshot() {
       return store.snapshot();

@@ -1,0 +1,154 @@
+{
+  "id": "014",
+  "slug": "frazil",
+  "title": "Frazil",
+  "display": {
+    "exposure": 0,
+    "tonemap": "tanh"
+  },
+  "date": "2026-10-17",
+  "tags": [
+    "phase-field",
+    "solidification",
+    "dendrite",
+    "stateful"
+  ],
+  "passes": [
+    {
+      "id": "flux",
+      "shader": "buffer-flux.frag",
+      "size": 512,
+      "substeps": 12
+    },
+    {
+      "id": "ice",
+      "shader": "buffer-ice.frag",
+      "size": 512,
+      "substeps": 12
+    }
+  ],
+  "lockstep": true,
+  "poster": {
+    "frame": 560,
+    "seed": 9
+  },
+  "video": {
+    "seconds": 12,
+    "fps": 60
+  },
+  "still": {
+    "width": 4000,
+    "height": 4000,
+    "spp": 4
+  },
+  "thumb": {
+    "draws": 1,
+    "spp": 2
+  },
+  "notes": "Ice growing into undercooled water: Kobayashi's (1993) anisotropic phase field, a melt rather than a snowflake. Growth is limited by how fast latent heat diffuses away, and the branching is the Mullins-Sekerka instability of that front.\n\nThe main parameter is a history, not a number. The crystal's radius is time, so each ring of it records the water it grew in. By default the seed draws that history: uEpochs epochs alternating between a dendritic band (T_eq 0.93-1.08) and a plate band (1.20-1.40), with seeded lengths, so a different seed is a different crystal rather than different noise (before this, six seeds grew one crystal with different side-branch detail). The presets use a hand schedule instead (uEpochs 0: uTeqA, then uTeqB from uSwitch), so a named look does not change with the seed: rim (dendrite, then a sectored plate edge), fern, sparse, stellar (plate core, then dendrite). A slow shared wobble on top stands for the weather every arm feels at once, which is why the six arms resemble each other.\n\nThe image is drawn from the step at which each cell first froze, which is written once and never revised; phi itself forgets as branches coarsen. Brightness decays with time since freezing, so the growing front is the brightest thing in the picture. Ice does not glow: the afterglow is a metaphor for the latent heat released at the front, not a physical emission.\n\nDesign and measurements: claude/014-crystal-design.md in the project notes.",
+  "ref": {
+    "size": 96,
+    "draws": 1,
+    "spp": 2,
+    "frame": 20,
+    "seed": 0
+  },
+  "presets": [
+    {
+      "name": "rim",
+      "values": {
+        "uGlow": 1.6,
+        "uAfterglow": 0.2,
+        "uHalo": 0.5,
+        "uFresh": "#ffedc8",
+        "uCool": "#a8dfff",
+        "uDeep": "#98b1ff",
+        "uWater": "#0d1627",
+        "uK": 1.8,
+        "uTeqA": 1.0,
+        "uTeqB": 1.35,
+        "uSwitch": 0.84,
+        "uLife": 6700,
+        "uEpochs": 0,
+        "uWobble": 0.03,
+        "uNoise": 0.006,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 3
+      }
+    },
+    {
+      "name": "fern",
+      "values": {
+        "uGlow": 1.6,
+        "uAfterglow": 0.2,
+        "uHalo": 0.5,
+        "uFresh": "#ffedc8",
+        "uCool": "#a8dfff",
+        "uDeep": "#98b1ff",
+        "uWater": "#0d1627",
+        "uK": 1.8,
+        "uTeqA": 1.0,
+        "uTeqB": 1.0,
+        "uSwitch": 0.84,
+        "uLife": 6700,
+        "uEpochs": 0,
+        "uWobble": 0.03,
+        "uNoise": 0.006,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 3
+      }
+    },
+    {
+      "name": "sparse",
+      "values": {
+        "uGlow": 1.6,
+        "uAfterglow": 0.2,
+        "uHalo": 0.5,
+        "uFresh": "#ffedc8",
+        "uCool": "#a8dfff",
+        "uDeep": "#98b1ff",
+        "uWater": "#0d1627",
+        "uK": 1.8,
+        "uTeqA": 0.93,
+        "uTeqB": 0.93,
+        "uSwitch": 0.84,
+        "uLife": 6700,
+        "uEpochs": 0,
+        "uWobble": 0.03,
+        "uNoise": 0.006,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 3
+      }
+    },
+    {
+      "name": "stellar",
+      "values": {
+        "uGlow": 1.6,
+        "uAfterglow": 0.2,
+        "uHalo": 0.5,
+        "uFresh": "#ffedc8",
+        "uCool": "#a8dfff",
+        "uDeep": "#98b1ff",
+        "uWater": "#0d1627",
+        "uK": 1.8,
+        "uTeqA": 1.28,
+        "uTeqB": 1.0,
+        "uSwitch": 0.35,
+        "uLife": 6700,
+        "uEpochs": 0,
+        "uWobble": 0.03,
+        "uNoise": 0.006,
+        "uDisplayExposure": 0,
+        "uBloomStrength": 0,
+        "uBloomThreshold": 1,
+        "uDisplayTonemap": 3
+      }
+    }
+  ]
+}

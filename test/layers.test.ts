@@ -133,6 +133,8 @@ const sources = new Map(glsl.map((f) => [f, code(readFileSync(f, 'utf8'))]));
     metric: ['mt'],
     noise: ['nz'],
     optics: ['opt'],
+    // pde: stencils (pde) and the phase-field point terms (pf), added with 014.
+    pde: ['pde', 'pf'],
     raymarch: ['rm', 'sceneSdf'],
     relativity: ['rel'],
     sample: ['smp'],

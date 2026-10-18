@@ -54,6 +54,18 @@ export interface PaHook {
     spp: number,
   ): number[];
 
+  /**
+   * Raw state of a simulation pass: width, height, and RGBA floats row-major
+   * from the bottom row. For probes that check what a simulation conserves or
+   * converges to — a picture of the state cannot answer either.
+   */
+  passState(id: string): { width: number; height: number; data: number[] };
+  /**
+   * Run a pass on another grid (null restores meta.json's). Probes only: the
+   * grid is part of the artwork. Call seekTo() afterwards; it voids the state.
+   */
+  setPassSize(id: string, size: number | null): void;
+
   setParam(name: string, value: number | number[] | boolean): void;
   /**
    * Apply a whole captured snapshot — a preset, or a saved URL hash — and

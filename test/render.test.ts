@@ -213,6 +213,24 @@ const OVERRIDES: (Partial<PieceCheck> & { id: string })[] = [
     simFrame: 150,
   },
   {
+    // Stateful: two passes in lockstep on a 512 grid, 67 ms a step on
+    // SwiftShader, so 0.8 s a frame and every seek is paid in full. The physics
+    // — conservation, equilibrium, agreement with the numpy prototype — is held
+    // in crystal.test.ts on small grids; here it is the image pass and the
+    // mechanism.
+    //
+    // simFrame 160, not something cheaper, and measured rather than guessed:
+    // the crystal starts as ten cells of a 512 grid, so early frames are a dot.
+    // The first version used 20 and both "the simulation evolves" (0.3/255) and
+    // "a parameter changes the image" (0.16) failed on a piece that works. At
+    // 120 they read 1.87 and 1.77; at 160, 3.11 and 2.69. The same mistake this
+    // file's workFrame comment records three times, made a fourth.
+    id: '014',
+    small: 120, ratio: 3, spp: 1, compare: 30, tolerance: 3,
+    poster: 360, posterDraws: 1, posterSpp: 2, posterFrame: 20,
+    simFrame: 160,
+  },
+  {
     // Stateful. The simulation grid is fixed at 384 texels on the short side,
     // so both resolutions in the comparison read the SAME field — which is the
     // whole point of sizing passes absolutely rather than as a fraction of the

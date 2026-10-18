@@ -35,6 +35,8 @@ including file, but there is rarely a reason to use them.
 | `opt` | optics | `optFresnelDielectric`, `optBeer` |
 | `env` | environment lookups | `envStudio`, `envBands` |
 | `smp` | sampling | `smpHalton23` |
+| `pde` | finite-difference stencils | `pdeLap9`, `pdeGrad9` |
+| `pf` | phase-field point terms | `pfEpsDir`, `pfDrive` |
 
 Hash and noise names carry `<inputDims><outputDims>`: `hash21` takes a `vec2`
 and returns a `float`. A trailing `s` means the function takes an explicit seed.
@@ -313,6 +315,16 @@ count and encodes to sRGB, so a float cannot survive it, while 0.0 and 1.0
 survive any monotonic encode exactly. Three thresholds per pixel then say how
 badly a property broke — losing only the tightest is a precision story, losing
 all three is a sign error.
+
+**Simulations get their state read, not their picture.** A probe sees a
+pixel; a simulation's invariants — what it conserves, what it converges to —
+are numbers over the whole grid. `window.__pa.passState(id)` returns a pass's
+raw float state, and `setPassSize(id, n)` runs it on a small grid so a check of
+a few thousand steps stays affordable on SwiftShader. The second is for probes
+only: the grid is part of the artwork, and nothing that renders a piece may
+change it. `test/crystal.test.ts` is the example — conservation, equilibrium,
+and a step-for-step cross-check against the numpy prototype the design was
+measured on, with the bound set where it rejects the simplified operator.
 
 **A probe proves it ran your shader.** Each one gets a directory Vite has never
 seen and stamps a hash of its own source into its first eight pixels, checked

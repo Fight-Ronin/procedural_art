@@ -102,6 +102,19 @@ export interface PieceMeta {
    */
   preset?: string;
   passes?: PassConfig[];
+  /**
+   * Run the passes substep by substep — every pass once, in order, then every
+   * pass again — instead of each pass running all its substeps before the next
+   * starts.
+   *
+   * The default order is right for a chain that is a pipeline (011: agents,
+   * then their deposit, then the trail). It is wrong for ONE update split
+   * across passes for efficiency: 014 computes eps eps' grad phi once per cell
+   * in one pass so the update pass can read it at the eight neighbours, and
+   * with the default order the update would run twelve times against a flux
+   * computed once. Requires two or more buffer passes with equal substeps.
+   */
+  lockstep?: boolean;
 }
 
 export interface Piece {
@@ -307,6 +320,28 @@ export function buildPiece(dir: string, rawMeta: unknown, files: Record<string, 
       substeps: pc.substeps ?? 1,
     };
   });
+
+  if (meta.lockstep !== undefined) {
+    if (typeof meta.lockstep !== 'boolean') {
+      throw new Error(`${where}: "lockstep" is ${JSON.stringify(meta.lockstep)}; expected true or false`);
+    }
+    if (meta.lockstep) {
+      if (passes.length < 2) {
+        throw new Error(`${where}: "lockstep" needs two or more passes to interleave (have ${passes.length})`);
+      }
+      const pts = passes.filter((p) => p.kind === 'points').map((p) => p.id);
+      if (pts.length) {
+        throw new Error(`${where}: "lockstep" interleaves buffer passes; ${pts.join(', ')} draws points`);
+      }
+      const subs = [...new Set(passes.map((p) => p.substeps))];
+      if (subs.length > 1) {
+        throw new Error(
+          `${where}: "lockstep" passes must share one substep count ` +
+            `(${passes.map((p) => `${p.id} ${p.substeps}`).join(', ')})`,
+        );
+      }
+    }
+  }
 
   return {
     id: meta.id,

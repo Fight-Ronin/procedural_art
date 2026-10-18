@@ -57,6 +57,10 @@ export class PassChain {
   private gl: WebGL2RenderingContext;
   private passes: LivePass[] = [];
   private pendingInit = true;
+  /** See PieceMeta.lockstep. */
+  private lockstep = false;
+  /** Sizes as meta.json declared them, so an override can be undone. */
+  private declared = new Map<string, number>();
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -75,8 +79,10 @@ export class PassChain {
     return this.passes.length > 0;
   }
 
-  setPasses(specs: PassSpec[]): void {
+  setPasses(specs: PassSpec[], lockstep = false): void {
     this.dispose();
+    this.lockstep = lockstep;
+    this.declared = new Map(specs.map((spec) => [spec.id, spec.size]));
     this.passes = specs.map((spec) => {
       const points = spec.kind === 'points';
       const program = points
@@ -107,6 +113,40 @@ export class PassChain {
     return changed;
   }
 
+  /**
+   * Run one pass on a different grid, or restore its declared size with null.
+   *
+   * FOR PROBES ONLY. The grid is part of a piece's definition — a 4x larger
+   * grid is a different picture — so nothing that renders the piece may call
+   * this. It exists because a simulation's invariants (conservation, the
+   * equilibrium it converges to) hold at every size, and checking them at the
+   * declared size would mean tens of thousands of steps on a software
+   * rasteriser. Takes effect at the next resize(), and voids the state.
+   */
+  setSize(id: string, size: number | null): void {
+    const pass = this.passes.find((p) => p.id === id);
+    if (!pass) throw new Error(`no pass "${id}" (have: ${this.ids.join(', ')})`);
+    pass.size = size ?? this.declared.get(id) ?? pass.size;
+    pass.target.dispose();
+    this.pendingInit = true;
+  }
+
+  /**
+   * The raw float state of a pass, row-major from the BOTTOM row (GL order),
+   * four channels per texel. What the probes read instead of a picture of it.
+   */
+  readState(id: string): { width: number; height: number; data: Float32Array } {
+    const pass = this.passes.find((p) => p.id === id);
+    if (!pass) throw new Error(`no pass "${id}" (have: ${this.ids.join(', ')})`);
+    const { gl } = this;
+    const { width, height } = pass.target;
+    const data = new Float32Array(width * height * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pass.target.read.fbo);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.FLOAT, data);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { width, height, data };
+  }
+
   /** Seed the state on the next step. */
   reset(): void {
     this.pendingInit = true;
@@ -133,6 +173,17 @@ export class PassChain {
   step(p: StepParams, applyParams?: (u: Uniforms) => void): void {
     if (this.passes.length === 0) return;
     const init = this.pendingInit;
+    if (this.lockstep) {
+      // One substep of every pass, then the next. buildPiece has already
+      // refused a lockstep chain whose passes disagree on the count.
+      if (init) for (const pass of this.passes) this.draw(pass, p, applyParams, 0, 1);
+      const n = Math.max(1, this.passes[0].substeps);
+      for (let s = 0; s < n; s++) {
+        for (const pass of this.passes) this.draw(pass, p, applyParams, s, 0);
+      }
+      this.pendingInit = false;
+      return;
+    }
     for (const pass of this.passes) {
       if (init) this.draw(pass, p, applyParams, 0, 1);
       for (let s = 0; s < Math.max(1, pass.substeps); s++) {

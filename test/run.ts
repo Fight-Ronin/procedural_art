@@ -8,7 +8,7 @@
  */
 import { check, section, summary } from './harness.ts';
 
-const SUITES = ['layers', 'include', 'params', 'pieces', 'preset', 'noise', 'shade', 'aa', 'sdf', 'fractal', 'fold', 'wave', 'volume', 'metric', 'relativity', 'agent', 'points', 'optics', 'refs', 'live', 'render', 'export', 'sequence', 'gallery'] as const;
+const SUITES = ['layers', 'include', 'params', 'pieces', 'preset', 'noise', 'shade', 'aa', 'sdf', 'fractal', 'fold', 'wave', 'volume', 'metric', 'relativity', 'agent', 'points', 'crystal', 'optics', 'refs', 'live', 'render', 'export', 'sequence', 'gallery'] as const;
 
 // Numeric arguments are piece ids consumed by the render suite, not suite names.
 const filter = process.argv
